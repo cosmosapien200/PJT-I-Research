@@ -1,0 +1,6 @@
+dataset,cls,n_records,record_failure_rate,mean_frac_beats_bad_duration
+zch,ASD,119,0.0,0.0044987692046515575
+zch,PDA,32,0.0,0.0
+zch,PFO,70,0.0,0.010793650793650793
+zch,VSD,187,0.0,0.0033422459893048127
+zch,control,533,0.0,0.006574116939970598

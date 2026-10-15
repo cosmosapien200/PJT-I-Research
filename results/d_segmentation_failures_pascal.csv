@@ -1,0 +1,4 @@
+dataset,cls,n_records,record_failure_rate,mean_frac_beats_bad_duration
+pascal,extrasystole,46,0.06521739130434782,0.06521739130434782
+pascal,murmur,95,0.010526315789473684,0.010526315789473684
+pascal,normal,320,0.034375,0.04139766483516484

@@ -1,0 +1,7 @@
+dataset,cls,n_records,record_failure_rate,mean_frac_beats_bad_duration
+bmdhs,AR,56,0.0,0.0017857142857142852
+bmdhs,AS,64,0.0,0.0
+bmdhs,MR,88,0.0,0.01278409090909091
+bmdhs,MS,88,0.0,0.01215277777777778
+bmdhs,multi,408,0.0,0.013221677559912853
+bmdhs,normal,168,0.0,0.0

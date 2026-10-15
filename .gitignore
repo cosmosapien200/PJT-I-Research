@@ -1,0 +1,7 @@
+data/raw/
+data/processed/
+data/models/*.pt
+.venv/
+__pycache__/
+logs/run/
+logs/dl/
