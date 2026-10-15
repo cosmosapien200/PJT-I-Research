@@ -13,22 +13,27 @@ NAMES = {'b1_lr': 'B1 LR', 'b1_svm': 'B1 SVM', 'b2_rf': 'B2 RF', 'b4_cnn': 'B4 C
 
 def training_curves():
     fs = sorted(glob.glob(os.path.join(LOGT, '*.csv')))
-    deep = [f for f in fs if not f.endswith('_cv.csv')]
     cv = [f for f in fs if f.endswith('_cv.csv')]
-    fig, ax = plt.subplots(1, 3, figsize=(16, 4.5))
-    for f in deep:
-        d = pd.read_csv(f); n = os.path.basename(f)[:-4]
-        l, = ax[0].plot(d.epoch, d.train_loss, '--', lw=1)
-        ax[0].plot(d.epoch, d.val_loss, '-', color=l.get_color(), lw=1.5, label=n)
-        ax[1].plot(d.epoch, d.val_auroc, color=l.get_color(), label=n)
-    ax[0].set(title='Loss (dashed train, solid val)', xlabel='epoch'); ax[0].legend(fontsize=6)
-    ax[1].set(title='Validation AUROC', xlabel='epoch'); ax[1].legend(fontsize=6)
+    groups = [('quality models', [f for f in fs if not f.endswith('_cv.csv') and 'e5_' not in f]),
+              ('E5 murmur classifiers', [f for f in fs if 'e5_' in os.path.basename(f)])]
+    fig, ax = plt.subplots(2, 3, figsize=(17, 9))
+    cmap = plt.get_cmap('tab10')
+    for r, (title, files) in enumerate(groups):
+        for i, f in enumerate(files):
+            d = pd.read_csv(f); n = os.path.basename(f)[:-4].replace('e5_murmur_', '')
+            c = cmap(i % 10)
+            ax[r, 0].plot(d.epoch, d.train_loss, '--', color=c, lw=1)
+            ax[r, 0].plot(d.epoch, d.val_loss, '-', color=c, lw=1.5, label=n)
+            ax[r, 1].plot(d.epoch, d.val_auroc, color=c, label=n)
+        ax[r, 0].set(title=f'{title}: loss (dashed train, solid val)', xlabel='epoch'); ax[r, 0].legend(fontsize=7)
+        ax[r, 1].set(title=f'{title}: validation AUROC', xlabel='epoch'); ax[r, 1].legend(fontsize=7)
     for i, f in enumerate(cv):
         d = pd.read_csv(f)
-        ax[2].scatter(np.full(len(d), i), d.auroc, s=15)
-    ax[2].set_xticks(range(len(cv)), [os.path.basename(f)[:-7] for f in cv])
-    ax[2].set(title='Classic models: per-fold AUROC')
-    fig.tight_layout(); fig.savefig(os.path.join(FIG, 'training_curves.png'), dpi=130); plt.close(fig)
+        ax[0, 2].scatter(np.full(len(d), i), d.auroc, s=15)
+    ax[0, 2].set_xticks(range(len(cv)), [os.path.basename(f)[:-7] for f in cv])
+    ax[0, 2].set(title='Classic models: per-fold AUROC')
+    ax[1, 2].axis('off')
+    fig.tight_layout(); fig.savefig(os.path.join(FIG, 'training_curves.png'), dpi=120); plt.close(fig)
 
 
 def e2_figure():

@@ -1,0 +1,11 @@
+seed: 42
+sample_rate_hz: 2000
+window_s: 5.0
+train_data: PhysioNet 2016 common corpus (5 s / 2.5 s hop)
+score: higher = more likely unusable
+source: study baseline
+preprocessing: as b4_cnn
+architecture: blocks 1-2 as B4 (pool 2x2), blocks 3-4 pool 2x1 (freq) -> BiLSTM 2
+  x 64 -> mean over time -> linear -> sigmoid
+training: as b4_cnn
+published_threshold: 0.5

@@ -138,7 +138,7 @@ def load_model(name):
 def score(name, W):
     """Unusable probability for raw float16 windows."""
     m = load_model(name)
-    return 1 / (1 + np.exp(-predict_logits(m, prep_audio(W))))
+    return 1 / (1 + np.exp(-predict_logits(m, prep_audio(W)).astype(np.float64)))   # float64: no saturation at 1.0
 
 
 def main(name):

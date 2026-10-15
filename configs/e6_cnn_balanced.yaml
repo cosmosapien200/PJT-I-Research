@@ -1,0 +1,9 @@
+seed: 42
+sample_rate_hz: 2000
+window_s: 5.0
+train_data: PhysioNet 2016 common corpus (5 s / 2.5 s hop)
+score: higher = more likely unusable
+source: E6 mitigation
+base: b4_cnn
+change: 'weighted sampling: usable windows 50/50 normal vs abnormal recordings'
+published_threshold: 0.5

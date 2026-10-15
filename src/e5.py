@@ -11,7 +11,7 @@ import numpy as np, pandas as pd, torch
 from sklearn.metrics import roc_auc_score
 from common import PROC, MAN, RES, LOGT, SEED, stable_seed
 import deep
-from analysis import load, MODELS
+from analysis import load, MODELS, add_rejections
 
 THR = os.path.join(RES, 'c_thresholds.csv')
 
@@ -20,8 +20,9 @@ def main():
     e1 = load('e1', 'circor')
     man = pd.read_csv(os.path.join(MAN, 'circor.csv'))[['record_id', 'e5_split', 'murmur_present']]
     b = e1.merge(man, on='record_id')
-    thr = pd.read_csv(THR)
-    thr = thr[thr.dataset == 'circor'].set_index('model').matched
+    thr_all = pd.read_csv(THR)
+    thr = thr_all[thr_all.dataset == 'circor'].set_index('model').matched
+    b = add_rejections(b, thr_all, [m for m in MODELS if m in b and m in thr.index])
     W = np.load(os.path.join(PROC, 'circor_beat_windows.npy'), mmap_mode='r')
     use = b.e5_split.isin(['e5_train', 'e5_test']).values
     sel = np.flatnonzero(use)
@@ -38,7 +39,7 @@ def main():
     rows = []
     variants = ['unfiltered'] + [m for m in MODELS if m in b and m in thr.index]
     for v in variants:
-        keep = np.ones(len(b), bool) if v == 'unfiltered' else (b[v].values <= thr[v])
+        keep = np.ones(len(b), bool) if v == 'unfiltered' else (b[f'{v}__matched'].values == 0)
         tr = np.flatnonzero((b.e5_split.values == 'e5_train') & ~is_val & keep)
         va = np.flatnonzero((b.e5_split.values == 'e5_train') & is_val & keep)
         model = deep.train_model(f'e5_{v}', X, y, tr, va, deep.CNN, log_path=os.path.join(LOGT, f'e5_murmur_{v}.csv'))

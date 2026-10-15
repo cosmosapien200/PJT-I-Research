@@ -1,0 +1,23 @@
+seed: 42
+sample_rate_hz: 2000
+window_s: 5.0
+train_data: PhysioNet 2016 common corpus (5 s / 2.5 s hop)
+score: higher = more likely unusable
+source: Das et al. CinC 2017; US11373757B2
+preprocessing: z-score; Hilbert envelope; LP 20 Hz (2nd order); 50 Hz; autocorrelation;
+  LP 10 Hz filtfilt
+features:
+- acf_sampen
+- acf_kurtosis
+- svd_ratio_min
+- env_power
+- acf_var
+- sin1_corr
+- sin2_corr
+- sin3_corr
+- pow_ratio_240
+- r500_mean
+- r500_var
+classifier: RandomForest(n_estimators=120, max_features='sqrt', class_weight=balanced)
+cv: 5-fold by patient
+published_threshold: 0.5

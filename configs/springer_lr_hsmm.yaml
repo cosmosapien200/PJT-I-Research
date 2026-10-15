@@ -1,0 +1,9 @@
+seed: 42
+sample_rate_hz: 2000
+window_s: 5.0
+train_data: PhysioNet 2016 common corpus (5 s / 2.5 s hop)
+score: higher = more likely unusable
+source: Springer et al. 2016 TBME via pyPCG
+training: 400 random SQI-1 PhysioNet records, hand-corrected S1/S2 centres
+signal_fs: 1000
+recalc_timing: true

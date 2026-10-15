@@ -1,0 +1,13 @@
+seed: 42
+sample_rate_hz: 2000
+window_s: 5.0
+train_data: PhysioNet 2016 common corpus (5 s / 2.5 s hop)
+score: higher = more likely unusable
+source: github.com/cosmosapien200/PCGKolect_model release/seg_final.pt (not retrained)
+preprocessing: HP 20 Hz; 128-pt Hann STFT hop 40; 32 mel 25-900 Hz; log; -mean; /4
+input: 5 s beat window reflection-padded to 10328 samples
+decoder: seg/decode.py duration-constrained Viterbi
+variants:
+  b6a: 1 - confidence of matched beat (>=50% overlap); no match -> 1
+  b6b: b6a, and 1 if duration 0.3-2.0 s or rhythm +-30% check fails
+published_threshold: confidence 0.80 -> score 0.20

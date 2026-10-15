@@ -1,0 +1,16 @@
+seed: 42
+sample_rate_hz: 2000
+window_s: 5.0
+train_data: PhysioNet 2016 common corpus (5 s / 2.5 s hop)
+score: higher = more likely unusable
+source: Springer et al. 2016 JMET
+preprocessing: Butterworth band-pass 25-400 Hz order 4 (zero-phase), z-score
+features:
+- kurtosis
+- env_std
+- env_acf_max (lag 0.5-2 s)
+- env_sampen (30 Hz, m=2, r=0.2)
+- periodicity (pyPCG)
+classifier: StandardScaler + LogisticRegression(class_weight=balanced, max_iter=2000)
+cv: 5-fold by patient
+published_threshold: 0.5

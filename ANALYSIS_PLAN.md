@@ -78,3 +78,10 @@ The SVM is the B1 model used in the bias experiments; LR is reported alongside.
 
 ## Changes after seeing results
 (none)
+- 2026-10-16, after the first analysis run (seen: calibration thresholds and E1/E2 tables). (1) Deep-model scores
+  were saturating at exactly 1.0 (float32 sigmoid), and B6 gives exactly 1.0 to every unmatched beat, so for some
+  model × dataset pairs more than 10 % of calibration normal beats were tied at the maximum and "reject if score >
+  90th percentile" rejected far fewer than 10 %. Fix: deep scores recomputed in float64; the matched threshold is the
+  90th percentile (an observed value) and beats exactly at it are rejected with the probability that makes the
+  calibration rejection exactly 10 % (uniform number from a hash of the beat ID, identical across noise levels).
+  The plan's intent (reject 10 % of clean calibration normal beats) is unchanged; only tie handling was unspecified.

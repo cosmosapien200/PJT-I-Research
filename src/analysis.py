@@ -7,7 +7,7 @@ e2_equal_noise.csv, e3_breakdown.csv, e4_by_dataset.csv, e6_mitigation.csv, f_ge
 import os, warnings
 import numpy as np, pandas as pd
 from sklearn.metrics import roc_auc_score, balanced_accuracy_score, roc_curve
-from common import PROC, RES, MAN, SEED
+from common import PROC, RES, MAN, SEED, stable_seed
 
 warnings.filterwarnings('ignore')
 SC = os.path.join(PROC, 'scores')
@@ -87,18 +87,28 @@ def thresholds(e1, models):
     for ds in DATASETS:
         cal = e1[(e1.dataset == ds) & (e1.split == 'calibration') & e1.cls.isin(NORMAL) & (e1.clean == 1)]
         for m in models:
-            rows.append(dict(dataset=ds, model=m, published=PUBLISHED[m], matched=float(np.percentile(cal[m], 90)),
-                             n_calibration_beats=len(cal), n_calibration_patients=cal.patient_id.nunique(),
-                             cal_reject_rate_published=float((cal[m] > PUBLISHED[m]).mean())))
+            v = cal[m].values
+            thr = float(np.percentile(v, 90, method='higher'))
+            p_gt, p_eq = float((v > thr).mean()), float((v == thr).mean())
+            q = float(np.clip((0.10 - p_gt) / p_eq, 0, 1)) if p_eq > 0 else 0.0
+            rows.append(dict(dataset=ds, model=m, published=PUBLISHED[m], matched=thr, tie_reject_prob=q,
+                             frac_cal_at_threshold=p_eq, n_calibration_beats=len(cal), n_calibration_patients=cal.patient_id.nunique(),
+                             cal_reject_rate_matched=p_gt + q * p_eq,
+                             cal_reject_rate_published=float((v > PUBLISHED[m]).mean())))
     t = pd.DataFrame(rows)
     t.to_csv(os.path.join(RES, 'c_thresholds.csv'), index=False)
     return t
 
 
 def add_rejections(df, thr, models):
+    # ties at the matched threshold are rejected with probability tie_reject_prob, using a uniform number
+    # derived from the beat ID (same for every noise level of a beat), so calibration rejection is exactly 10 %
+    u = df.beat_id.map(lambda b: stable_seed('tie', b) / 2 ** 32).values
     for m in models:
         tm = thr[thr.model == m].set_index('dataset')
-        df[f'{m}__matched'] = (df[m].values > df.dataset.map(tm.matched).values).astype(int)
+        t, q = df.dataset.map(tm.matched).values, df.dataset.map(tm.tie_reject_prob).values
+        s = df[m].values
+        df[f'{m}__matched'] = ((s > t) | ((s == t) & (u < q))).astype(int)
         df[f'{m}__published'] = (df[m].values > PUBLISHED[m]).astype(int)
     return df
 
@@ -156,18 +166,33 @@ def gee(e2, models):
                 sub = d[d.cls.isin([c] + list(NORMAL))].copy()
                 sub['y'] = sub[col]; sub['path'] = (~sub.cls.isin(NORMAL)).astype(int)
                 sub = sub.sort_values('patient_id')
-                base = dict(dataset=ds, model=m, cls=c, n_beats=len(sub), n_patients=sub.patient_id.nunique())
-                if sub.y.nunique() < 2 or sub[sub.path == 1].patient_id.nunique() < 3:
-                    rows.append(base | dict(odds_ratio=np.nan, or_ci_lo=np.nan, or_ci_hi=np.nan, p=np.nan, note='degenerate'))
+                # drop noise levels with no variation in this contrast (complete separation; no class information)
+                var = sub.groupby('snr_level').y.transform(lambda v: 0 < v.mean() < 1).astype(bool)
+                sub = sub[var]
+                base = dict(dataset=ds, model=m, cls=c, n_beats=len(sub), n_patients=sub.patient_id.nunique(),
+                            snr_levels_used='/'.join(sorted(sub.snr_level.unique())))
+                if sub.empty or sub.y.nunique() < 2 or sub[sub.path == 1].patient_id.nunique() < 3:
+                    rows.append(base | dict(odds_ratio=np.nan, or_ci_lo=np.nan, or_ci_hi=np.nan, p=np.nan, cov_struct='', note='degenerate'))
                     continue
-                try:
-                    f = smf.gee('y ~ path + C(snr_level)', 'patient_id', sub, family=sm.families.Binomial(),
-                                cov_struct=sm.cov_struct.Exchangeable()).fit()
-                    b, se = f.params['path'], f.bse['path']
-                    rows.append(base | dict(odds_ratio=np.exp(b), or_ci_lo=np.exp(b - 1.96 * se), or_ci_hi=np.exp(b + 1.96 * se),
-                                            p=f.pvalues['path'], note=''))
-                except Exception as e:
-                    rows.append(base | dict(odds_ratio=np.nan, or_ci_lo=np.nan, or_ci_hi=np.nan, p=np.nan, note=type(e).__name__))
+                form = 'y ~ path + C(snr_level)' if sub.snr_level.nunique() > 1 else 'y ~ path'
+                res = None
+                for cs_name, cs in (('exchangeable', sm.cov_struct.Exchangeable()), ('independence', sm.cov_struct.Independence())):
+                    try:
+                        with warnings.catch_warnings(record=True) as w:
+                            warnings.simplefilter('always')
+                            f = smf.gee(form, 'patient_id', sub, family=sm.families.Binomial(), cov_struct=cs).fit(maxiter=100)
+                        b, se = f.params['path'], f.bse['path']
+                        bad = any('Iteration limit' in str(x.message) or 'converge' in str(x.message).lower() for x in w)
+                        if np.isfinite(b) and np.isfinite(se) and se > 1e-6 and abs(b) < 15 and not bad:
+                            res = (cs_name, b, se, f.pvalues['path']); break
+                    except Exception:
+                        pass
+                if res is None:
+                    rows.append(base | dict(odds_ratio=np.nan, or_ci_lo=np.nan, or_ci_hi=np.nan, p=np.nan, cov_struct='', note='not converged'))
+                    continue
+                cs_name, b, se, p = res
+                rows.append(base | dict(odds_ratio=np.exp(b), or_ci_lo=np.exp(b - 1.96 * se), or_ci_hi=np.exp(b + 1.96 * se),
+                                        p=p, cov_struct=cs_name, note=''))
     g = pd.DataFrame(rows)
     g['p_holm'] = np.nan
     for (ds, c), idx in g.groupby(['dataset', 'cls']).groups.items():

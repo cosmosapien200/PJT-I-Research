@@ -1,0 +1,11 @@
+seed: 42
+sample_rate_hz: 2000
+window_s: 5.0
+train_data: PhysioNet 2016 common corpus (5 s / 2.5 s hop)
+score: higher = more likely unusable
+source: E5
+architecture: b4_cnn
+target: patient murmur Present vs Absent
+data: CirCor non-calibration patients 60/40 by patient
+validation: 15% of training patients
+patient_score: max over beats

@@ -1,0 +1,19 @@
+seed: 42
+sample_rate_hz: 2000
+window_s: 5.0
+train_data: PhysioNet 2016 common corpus (5 s / 2.5 s hop)
+score: higher = more likely unusable
+source: study baseline
+preprocessing: HP 20 Hz (Butterworth 2), per-window z-score, log-mel 64 bands 20-1000
+  Hz, 25 ms win, 10 ms hop, n_fft 512
+architecture: 4 x [Conv3x3-BN-ReLU-MaxPool2x2] (32,64,128,128) -> GAP -> dropout 0.3
+  -> linear -> sigmoid
+training:
+  optimizer: Adam
+  lr: 0.001
+  batch: 64
+  loss: BCE with pos_weight
+  max_epochs: 50
+  early_stopping: val loss, patience 5
+  validation: PhysioNet fold 0
+published_threshold: 0.5

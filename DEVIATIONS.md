@@ -42,3 +42,12 @@
 - PASCAL: a patient counts as normal (calibration-eligible) only if all their recordings are normal.
 - Synthetic rhythm sets: 300 clean normal CirCor evaluation recordings; beats concatenated to 20 s, durations changed only by trimming / extending (reflected tail) the diastole; premature beats shift 25-40 % of the previous RR earlier with a compensatory pause; up to 4 modified beats per sequence are scored. They use CirCor's thresholds and are compared with CirCor normal beats.
 - E2 noise: Bank 2 source chosen 50/50 (LibriSpeech vs DEMAND) before picking the clip, otherwise 94 % of clips would be speech.
+
+## Analysis
+- Matched threshold ties: deep scores are computed in float64 (float32 sigmoids saturated at exactly 1.0) and beats exactly at the 90th-percentile threshold are rejected with the probability that makes calibration rejection exactly 10 % (deterministic per beat ID). Needed because B6 gives 1.0 to every unmatched beat (e.g. 15 % of ZCHSound calibration beats). Logged in ANALYSIS_PLAN.md.
+- GEE: noise levels with no variation in a contrast (e.g. 100 % rejection at 0 dB) are dropped from that fit (complete separation); if the exchangeable fit does not converge, independence working correlation (still patient-clustered robust SEs) is used (18 of 162 fits).
+- Bootstrap CIs for differences resample patients independently in the pathological and normal groups; synthetic rhythm beats come from CirCor evaluation patients who also contribute normal beats, so their CIs ignore that pairing.
+- E5: early-stopping validation = 15 % of training patients (not specified in plan); sensitivity/specificity at 0.5 on the max-over-beats patient score; patients with murmur Unknown excluded.
+- E3 "disease present" breakdown for BMD-HS counts multi-disease patients under each of their diseases (in addition to the class breakdown).
+- E4 pools pathological classes as: CirCor systolic + diastolic murmur; ZCHSound ASD+VSD+PFO+PDA; BMD-HS AS+AR+MR+MS+multi; PASCAL murmur+extrasystole (unknown, other-location, no-murmur-abnormal-outcome and synthetic beats excluded).
+- B6 at its published threshold rejects 27 % of clean ZCHSound control calibration beats and leaves 15 % of them unmatched (paediatric heart rates); reported as found.

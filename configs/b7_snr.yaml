@@ -1,0 +1,8 @@
+seed: 42
+sample_rate_hz: 2000
+window_s: 5.0
+train_data: PhysioNet 2016 common corpus (5 s / 2.5 s hop)
+score: -(SNR dB); SNR = P(S1+S2) / P(quietest diastole) in the window, 25-400 Hz band-pass
+source: Giordano et al. 2021
+segmentation: reference (annotation or Springer LR-HSMM)
+published_threshold: SNR 14 dB -> score -14

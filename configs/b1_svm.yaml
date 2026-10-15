@@ -1,0 +1,12 @@
+seed: 42
+sample_rate_hz: 2000
+window_s: 5.0
+train_data: PhysioNet 2016 common corpus (5 s / 2.5 s hop)
+score: higher = more likely unusable
+source: Springer et al. 2014 ICASSP
+preprocessing: as b1_lr
+features: as b1_lr
+classifier: StandardScaler + SVC(rbf, class_weight=balanced, probability=True)
+train_subsample: 12000
+cv: 5-fold by patient
+published_threshold: 0.5
