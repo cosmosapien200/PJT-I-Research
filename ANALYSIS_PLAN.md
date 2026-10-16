@@ -131,3 +131,16 @@ The SVM is the B1 model used in the bias experiments; LR is reported alongside.
 * Claims: "B8 removes the diagnosed flaws" if C3 = 0 and C1, C2 hold. "B8 is the best filter overall" only if additionally its C3
   is <= every other filter's and its C1 exceeds every filter with an equal or lower C3. Whatever the outcome, B8's results are
   reported in full; a failure of any criterion is reported as such.
+
+## B8 outcome and second iteration (disclosed; written before v4 is trained or tested)
+* B8 result: C3 = 1 over-rejected condition (CirCor systolic murmur), but C1 failed (PhysioNet fold-0 AUROC 0.773) and C2
+  failed (clean vs 0 dB AUROC 0.69 ZCHSound, 0.21 BMD-HS). B8 therefore does not qualify. The C1 failure was visible on
+  PhysioNet before testing. Ablation B8-noaug: C1 0.966 but biased on 9 conditions.
+* Iteration v4 (motivated by the PhysioNet C1 failure: aggressive diastole compression makes heart sound dense and
+  noise-like): two candidates with gentler augmentation, otherwise identical to B8:
+  v4a recording factor log-U(0.60, 1.25), jitter U(0.85, 1.15), premature p = 0.10, extra shortening 25-40 %;
+  v4b recording factor log-U(0.50, 1.30), jitter U(0.80, 1.20), premature p = 0.15.
+* Selection uses PhysioNet fold 0 only: candidates must have C1 >= 0.963; among those, the one with the smallest
+  rhythm-shift AUROC (|AUROC - 0.5| of the noise score between clean fold-0 normal crops and the same crops after strong
+  premature/irregular augmentation) is chosen; ties -> v4a. The chosen one is called B8v4 and tested once with the B8 criteria
+  (C1-C3). This iteration is post hoc (B8's test results were seen) and is reported as such.
