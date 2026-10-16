@@ -182,7 +182,10 @@ B3 feature ranking `figures/paper/fig19c_b3_feature_ranking.png`.
   These do **not** transfer: on clean normal CirCor beats the 0.5 threshold rejects 73–82 % for B2–B5.
 * **Matched (main analysis):** per model × dataset, the 90th percentile (an observed value) of the scores of clean normal
   **calibration** beats; beats exactly at the threshold are rejected with the probability that makes calibration rejection
-  exactly 10 % (deterministic per beat ID, identical across noise levels). The synthetic sets use CirCor's thresholds.
+  exactly 10 % (deterministic per beat ID, identical across noise levels). **Exception (option A):** if more than 5 % of
+  the calibration beats sit exactly on the threshold, every tied beat is rejected (calibration rejection then exceeds 10 %).
+  This applies only to B6 on ZCHSound (17.5 % of calibration beats unmatched, score 1.0) and to the B6pn variants.
+  The synthetic sets use CirCor's thresholds.
 * **Pooled (sensitivity):** patient-weighted 90th percentile over all four datasets' calibration normals.
 
 ---
@@ -315,7 +318,9 @@ ZCHSound PFO patients are mostly infants (72 % infants + 6 % neonates vs 12 % in
 heart rates (median 130 vs 103 bpm). Adjustment removes the PFO effect for B4 (3.33 → 1.11), B1 SVM (2.44 → 1.29) and
 E6 (5.62 → 2.09). It survives for **B3 (4.25 → 3.78)** and **B5 (6.71 → 2.50)**, and within heart-rate bands the PFO gap
 stays positive for B3/B4/B5/E6 in most bands (`results/fix3_hr_band_gaps.csv`). PDA is not significant for any model
-after adjustment. On CirCor, B5's systolic-murmur over-rejection (OR 1.31) and B1 LR's under-rejection (OR 0.78) survive.
+after adjustment. B6 over-rejects PFO before adjustment (OR 2.74) but not after heart-rate + age adjustment (OR 1.58,
+n.s.), consistent with its adult beat-duration limits failing on fast infant heart rates. On CirCor, B5's
+systolic-murmur over-rejection (OR 1.31) and B1 LR's under-rejection (OR 0.78) survive.
 
 ### 10.6 E3 — murmur grade and timing (CirCor)
 
@@ -332,7 +337,7 @@ Pooled pathological − normal gap (matched threshold), `results/e4_by_dataset.c
 | Dataset | E2 clean: range across filters | Largest |
 |---|---|---|
 | CirCor | −3.7 to +7.3 pp | B6 +7.3, B5 +6.2 |
-| ZCHSound | +2.2 to +19.6 pp | B3 +19.6, B5 +19.0, E6 +18.9, B4 +15.5 |
+| ZCHSound | +3.3 to +19.6 pp | B3 +19.6, B5 +19.0, E6 +18.9, B4 +15.5 |
 | BMD-HS (supportive) | −4.8 to +26.9 pp | B6 +26.8, B1 SVM +15.7, B7 +13.6 |
 | PASCAL (supportive) | −8.1 to +9.7 pp | none significant |
 
@@ -370,16 +375,18 @@ is 7–32 %. Pooled thresholds reject only 0–3 % of these datasets' clean norm
 effect. Under published thresholds the BMD-HS multi-valve over-rejection by B1/B6/B7 (+14 to +19 pp) and the PASCAL
 murmur gaps for B2–B5 (+12 to +21 pp) persist. These two datasets are supportive evidence only.
 
-### 10.12 Sensitivity: B6 tie handling on ZCHSound (open decision)
+### 10.12 B6 tie handling on ZCHSound (option A adopted)
 
 ![ties](figures/paper/fig18_sensitivity_b6_ties_zchsound.png)
 
 B6 gives score 1.0 to every unmatched beat. On ZCHSound, 17.5 % of clean control calibration beats are unmatched (more than
-the 10 % target), so the matched threshold falls on that tie and randomised tie-breaking caps B6's rejection. If every
-unmatched beat is rejected instead (option A; calibration rejection 17.5 %), B6 over-rejects **PFO (OR 2.74, p < 0.001)**
-and **PDA (OR 1.84, p = 0.02)** (`results/sens_b6_ties_zch.csv`; unadjusted, not Holm-corrected). The likely cause is that
-B6's adult duration priors fail on infant heart rates. The main analysis keeps randomised ties (pre-specified intent:
-exactly 10 %); option A is reported as a sensitivity analysis pending a decision.
+the 10 % target), so the matched threshold falls on that tie, and the original randomised tie-breaking capped B6's rejection
+(e.g. ≤ 57 % of unmatched beats rejected even at 0 dB). **Option A is now the main analysis:** every tied beat is rejected
+when more than 5 % of calibration beats tie (calibration rejection 17.5 %). B6 then over-rejects **ZCHSound PFO (OR 2.74,
+Holm-significant; E2 clean +19 pp)** and PDA (OR 1.84, +18 pp, not significant after Holm). After heart-rate + age
+adjustment the PFO effect is OR 1.58 (n.s.; heart rate alone 1.72, significant). B6's PFO bias is therefore mainly a
+heart-rate effect: its adult duration priors fail on infant heart rates. The figure compares option A with the previous
+randomised rule (`results/sens_b6_ties_zch.csv`).
 
 ---
 
@@ -394,6 +401,7 @@ exactly 10 %); option A is reported as a sensitivity analysis pending a decision
 | 11.5 | E5 single seed, max-over-beats score, threshold 0.5 | mean over beats, Youden threshold on held-out training patients, 3 seeds | earlier B7 drop (0.86) did not replicate |
 | 11.6 | Exchangeable vs independence GEE disagree for some near-null fits | both reported | one sign flip with significance (B6pn CirCor systolic) |
 | 11.7 | B3 CardioPHON had no feature code | 416 features re-implemented from names | B3 approximates the published model |
+| 11.8 | Randomised tie-breaking capped B6 on ZCHSound (17.5 % of calibration beats unmatched) | option A: reject all ties when > 5 % of calibration beats tie | B6 over-rejects ZCHSound PFO before adjustment (OR 2.74); explained by heart rate after adjustment |
 
 ---
 
@@ -409,7 +417,7 @@ exactly 10 %); option A is reported as a sensitivity analysis pending a decision
 * **PhysioNet folds** are by recording outside subset b (no subject IDs). Deep models use one split and one seed;
   validation fold 0 also drives early stopping.
 * **Synthetic rhythm** sets are constructed from normal beats and approximate premature beats / AF only in timing.
-* **Option A vs B** for B6 tie handling is still open (§10.12).
+* **B6 on ZCHSound** uses option A tie handling, so its calibration rejection is 17.5 % rather than 10 % (§10.12).
 
 ---
 
@@ -420,7 +428,8 @@ exactly 10 %); option A is reported as a sensitivity analysis pending a decision
 2. **Irregular rhythm** is the most systematic failure of segmentation/periodicity-based filters (B6, B1, B3): premature
    beats are rejected up to 61 pp more often. Window-level deep classifiers (B4, B5) do not show this.
 3. **Paediatric congenital heart disease** is over-rejected by deep and CardioPHON-style filters (B3, B5, plus B4/E6
-   before adjustment). Part of it is heart rate/age, but B3 and B5 remain biased after adjustment and within heart-rate bands.
+   before adjustment, and B6 for PFO). Part of it is heart rate/age (it explains B4, E6 and B6), but B3 and B5 remain biased
+   after adjustment and within heart-rate bands.
 4. **Murmurs in CirCor** show small, filter-specific effects in both directions: B5 (and B6, not significant after
    correction) over-reject loud and holosystolic murmurs, while B1/B3 under-reject.
 5. **Upstream bias exists before any model:** expert quality labels (E0) and even an objective SNR-based clean rule
@@ -474,6 +483,6 @@ to noise but are blind to pathology (here B2).
 | fig15 | E5 downstream murmur detection |
 | fig16 | E6 mitigation and B6 retrained without CirCor |
 | fig17 | recalibration for BMD-HS and PASCAL |
-| fig18 | B6 tie-handling sensitivity on ZCHSound |
+| fig18 | B6 tie handling on ZCHSound: option A (main) vs previous randomised rule |
 | fig19a / b / c | B1 SVM ceiling, training curves, B3 feature ranking |
 | fig20_* | E2 rejection vs SNR per class, one per dataset |

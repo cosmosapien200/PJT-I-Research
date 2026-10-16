@@ -86,3 +86,7 @@ The SVM is the B1 model used in the bias experiments; LR is reported alongside.
   calibration rejection exactly 10 % (uniform number from a hash of the beat ID, identical across noise levels).
   The plan's intent (reject 10 % of clean calibration normal beats) is unchanged; only tie handling was unspecified.
 - 2026-10-16: B3 CardioPHON added to every table after the other results were seen (user request). It uses the same thresholds/tests; Holm correction now spans 10 models, which slightly changes adjusted p-values of the other models.
+- 2026-10-16 (user decision, option A): when more than 5 % of the calibration beats sit exactly on the matched threshold,
+  every tied beat is rejected instead of randomised tie-breaking (affects B6 on ZCHSound and the B6pn variants only;
+  calibration rejection 13.6-19.3 % instead of 10 %). Reason: B6 scores every unmatched beat 1.0, and randomised ties capped
+  its rejection under noise. Applied to the pooled threshold in the same way.

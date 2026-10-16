@@ -618,8 +618,10 @@ def f18_b6_ties():
         z = e2[e2.dataset == 'zch'].copy()
         thr = pd.read_csv(os.path.join(RES, 'c_thresholds.csv')).query('dataset=="zch" and model==@m').iloc[0]
         u = z.beat_id.map(lambda b: __import__('common').stable_seed('tie', b) / 2 ** 32).values
-        z['main'] = ((z[m] > thr.matched) | ((z[m] == thr.matched) & (u < thr.tie_reject_prob))).astype(int)
-        z['optA'] = (z[m] >= thr.matched).astype(int)
+        p_eq = thr.frac_cal_at_threshold
+        q_rand = float(np.clip((0.10 - (thr.cal_reject_rate_matched - thr.tie_reject_prob * p_eq)) / p_eq, 0, 1))
+        z['main'] = ((z[m] > thr.matched) | ((z[m] == thr.matched) & (u < q_rand))).astype(int)   # old randomised rule
+        z['optA'] = ((z[m] > thr.matched) | ((z[m] == thr.matched) & (u < thr.tie_reject_prob))).astype(int)   # current main rule
         for rule in ('main', 'optA'):
             for c in ['ASD', 'VSD', 'PFO', 'PDA']:
                 for lv in ['none', '20', '10', '5', '0']:
@@ -636,26 +638,26 @@ def f18_b6_ties():
     ax = axes[0]
     for rule, ls in (('main', (0, (3, 2))), ('optA', '-')):
         g = t[(t.model == 'b6a') & (t.rule == rule) & (t.cls == 'PFO') & (t.snr_level.isin(L))].set_index('snr_level').reindex(L)
-        ax.plot(range(5), g.rate * 100, color=CAT[5], ls=ls, marker='o', ms=4, label=f'PFO, {"randomised ties (main)" if rule == "main" else "all unmatched rejected (A)"}')
-        ax.plot(range(5), g.normal_rate * 100, color=INK2, ls=ls, marker='o', ms=4, label=f'control, {"main" if rule == "main" else "A"}')
+        ax.plot(range(5), g.rate * 100, color=CAT[5], ls=ls, marker='o', ms=4, label=f'PFO, {"randomised ties (previous)" if rule == "main" else "all ties rejected (option A, main)"}')
+        ax.plot(range(5), g.normal_rate * 100, color=INK2, ls=ls, marker='o', ms=4, label=f'control, {"previous" if rule == "main" else "option A"}')
     ax.set_xticks(range(5), ['clean', '20', '10', '5', '0']); ax.set_xlabel('added noise SNR (dB)'); ax.set_ylabel('B6 rejection rate (%)')
     ax.legend(fontsize=7.5, handlelength=3.5); ax.yaxis.grid(True, color=GRID); ax.set_axisbelow(True)
-    ax.set_title('(a) ZCHSound: randomised ties cap B6\n(dashed = main rule, solid = option A)')
+    ax.set_title('(a) ZCHSound: randomised ties capped B6\n(dashed = previous rule, solid = option A, now main)')
     ax = axes[1]
     gg = t[(t.model == 'b6a') & (t.snr_level == 'GEE')]
     cl = ['ASD', 'VSD', 'PFO', 'PDA']; x = np.arange(4); w = 0.36
     for k, (rule, col) in enumerate((('main', GREY), ('optA', CAT[5]))):
         v = [gg[(gg.rule == rule) & (gg.cls == c)].odds_ratio.iloc[0] for c in cl]
         p = [gg[(gg.rule == rule) & (gg.cls == c)].p.iloc[0] for c in cl]
-        ax.bar(x + (k - 0.5) * w, v, w * 0.92, color=col, label='main (randomised ties)' if rule == 'main' else 'option A (all unmatched rejected)')
+        ax.bar(x + (k - 0.5) * w, v, w * 0.92, color=col, label='previous (randomised ties)' if rule == 'main' else 'option A (all ties rejected, main)')
         for xx, vv, pp in zip(x + (k - 0.5) * w, v, p):
             ax.text(xx, vv + 0.04, f'{vv:.2f}' + ('*' if pp < 0.05 else ''), ha='center', fontsize=8, color=INK2)
     ax.axhline(1, color=INK2, lw=1); ax.set_xticks(x, cl); ax.set_ylabel('GEE odds ratio vs control')
     ax.legend(fontsize=8); ax.yaxis.grid(True, color=GRID); ax.set_axisbelow(True)
-    ax.set_title('(b) B6 GEE odds ratio vs control\n(PFO/PDA significant under option A)')
+    ax.set_title('(b) B6 GEE odds ratio vs control, unadjusted\n(PFO/PDA significant under option A)')
     fig.tight_layout(rect=(0, 0.06, 1, 1))
     save(fig, 'fig18_sensitivity_b6_ties_zchsound', '17.5 % of clean ZCHSound control calibration beats are unmatched by B6 (> the 10 % target), so the matched threshold lies on the tie at 1.0. '
-         '* unadjusted p < 0.05 (no Holm; sensitivity analysis). Pending decision: main analysis keeps randomised ties.')
+         'Option A (main analysis since the follow-up): every tied beat is rejected when > 5 % of calibration beats tie, so B6 calibration rejection on ZCHSound is 17.5 % instead of 10 %. * p < 0.05.')
 
 
 # ------------------------------------------------------------------ F19 B1 SVM ceiling, training curves, B3 features

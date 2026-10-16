@@ -62,3 +62,7 @@
 - Fix 4: every GEE row also reports the independence-working-correlation fit (or_indep, p_indep) as a sensitivity analysis; the exchangeable fit stays primary as in the plan. They disagree in direction in 30 of 209 main fits, all near-null except the PhysioNet-only B6 on CirCor systolic murmur (exchangeable OR 0.86, independence OR 1.33, p = 0.009).
 - Fix 5 (E5): patient score = mean over beats; the decision threshold is Youden's J on the 15 % of training patients held out from fitting (never the test patients); 3 seeds (42, 43, 44) vary initialisation and batch order with fixed data splits.
 - Fix 6: PCGKolect U-Net retrained with the repo's own recipe (seg/train_seg.py --final, 12,000 steps, seed 123) on PhysioNet 2016 only (no CirCor) in a separate copy of the repo (data/raw/repos/PCGKolect_pnonly); noise bank built with the repo's prep_noise.py from Bank-1 sources only. Reported as B6pn-a/B6pn-b, a sensitivity model outside the Holm family.
+- Option A tie rule (user decision): wherever > 5 % of calibration normal beats tie at the matched (or pooled) threshold, all tied
+  beats are rejected, so those cells reject 13.6-19.3 % of calibration beats instead of exactly 10 % (B6a/B6b on ZCHSound, B6pn on
+  CirCor and ZCHSound). All other model x dataset cells (ties <= 2.6 %) keep exact-10 % randomised tie-breaking. Column
+  `tie_rule` in results/c_thresholds.csv.

@@ -83,8 +83,8 @@ a loss of rhythmic periodicity. Murmurs add energy inside a regular heartbeat; n
 ![confound](figures/paper/fig13_heart_rate_age_confound.png)
 
 PFO patients are mostly infants (78 % neonates or infants vs 12 % of controls) with faster heart rates (median 130 vs
-103 bpm). Correcting for heart rate and age removes the PFO effect for the CNN (OR 3.33 → 1.11), but it **survives
-for B3 (OR 3.78) and B5 (OR 2.50)**. The gap also stays positive *within* heart-rate bands.
+103 bpm). Correcting for heart rate and age removes the PFO effect for the CNN (OR 3.33 → 1.11) and
+for B6 (OR 2.74 → 1.58), but it **survives for B3 (OR 3.78) and B5 (OR 2.50)**. The gap also stays positive *within* heart-rate bands.
 
 ### 4. How the bias behaves as noise increases
 
@@ -166,9 +166,10 @@ Grey: unadjusted. Black: adjusted for heart rate (+ age). Red/blue: significant 
 * ZCHSound, BMD-HS and PASCAL beats come from an automatic segmenter (Springer LR-HSMM, with a paediatric heart-rate
   range for ZCHSound).
 * The CirCor diastolic-murmur group has only 5 patients.
-* **Open sensitivity analysis:** B6 gives every unmatched beat the maximum score, which caps it on ZCHSound under the
-  main threshold rule. Rejecting all unmatched beats instead makes B6 also biased against PFO and PDA
-  ([fig18](figures/paper/fig18_sensitivity_b6_ties_zchsound.png)).
+* **B6 on ZCHSound:** B6 gives every beat it cannot match the maximum score, and 17.5 % of clean control beats are
+  unmatched. All tied beats are therefore rejected there (calibration rejection 17.5 % instead of 10 %). B6 then
+  over-rejects PFO (OR 2.74), but this disappears after heart-rate/age correction: its adult beat-duration limits fail
+  on fast infant heartbeats ([fig18](figures/paper/fig18_sensitivity_b6_ties_zchsound.png)).
 
 Every deviation from the original plan is logged in [`DEVIATIONS.md`](DEVIATIONS.md).
 

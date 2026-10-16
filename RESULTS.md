@@ -40,10 +40,10 @@ exchangeable correlation within patient; * = Holm-adjusted p < 0.05 across the 1
 | CirCor murmur unknown | 3.09* | excl. | 2.85* | 1.20 | 5.94* | 5.08* | 7.17* | 6.88* | 6.67* | 2.47* |
 | CirCor synthetic premature | 1.63* | excl. | 0.98 | 1.27* | 0.75* | 0.74* | 0.72* | 14.2* | 21.1* | 0.59* |
 | CirCor synthetic irregular | 1.80* | excl. | 1.01 | 1.27* | 0.76* | 0.78* | 0.72* | 3.46* | 3.63* | 0.58* |
-| ZCHSound VSD | 1.33 | 1.22 | 0.95 | 1.45 | 1.40 | 2.32* | 1.43 | 1.05 | 1.04 | 1.69* |
-| ZCHSound ASD | 0.86 | 0.99 | 1.03 | 2.55* | 1.73* | 2.05* | 2.57* | 0.95 | 0.93 | 0.93 |
-| ZCHSound PFO | 1.57 | 2.44* | 1.18 | 4.25* | 3.33* | 6.71* | 5.62* | 1.32 | 1.25 | 1.41 |
-| ZCHSound PDA | 1.80 | 2.26 | 1.63 | 2.90 | 1.52 | 2.21* | 2.28 | 0.82 | 0.74 | 2.67 |
+| ZCHSound VSD | 1.33 | 1.22 | 0.95 | 1.45 | 1.40 | 2.32* | 1.43 | 1.03 | 1.02 | 1.69* |
+| ZCHSound ASD | 0.86 | 0.99 | 1.03 | 2.55* | 1.73* | 2.05* | 2.57* | 1.15 | 1.14 | 0.93 |
+| ZCHSound PFO | 1.57 | 2.44* | 1.18 | 4.25* | 3.33* | 6.71* | 5.62* | 2.74* | 2.80* | 1.41 |
+| ZCHSound PDA | 1.80 | 2.26 | 1.63 | 2.90 | 1.52 | 2.21* | 2.28 | 1.84 | 1.98 | 2.67 |
 | BMD-HS multi-disease | 1.67 | 1.75 | 1.18 | 1.13 | 1.03 | 1.21 | 0.87 | 2.43* | 2.44* | 2.10* |
 | BMD-HS MR | 2.08 | 2.57 | 1.02 | 0.92 | 1.49 | 2.94* | 1.18 | 3.58 | 3.58 | 2.21 |
 | BMD-HS AR | 0.26* | 0.26* | 0.80 | 0.73 | 0.47 | 0.30* | 0.70 | 1.29 | 1.29 | 1.01 |
@@ -99,7 +99,14 @@ Figures: `figures/e2_circor.png`, `e2_zch.png`, `e2_bmdhs.png`, `e2_pascal.png`.
 5. **E5 redone** (mean over beats, threshold from training patients, 3 seeds): every filter stays within ±0.02 AUROC of
    unfiltered (0.909 ± 0.008). The earlier single-seed B7 drop (0.86) did not replicate (0.914 ± 0.019). No filter clearly
    changes murmur detection.
-6. **B6 retrained on PhysioNet only** (B6pn, `e*_*_b6pn*`). Without CirCor training it matches only 77 % of CirCor
+6. **B6 tie handling (option A, user decision after the follow-up).** B6 gives every unmatched beat the maximum score
+   (1.0); on ZCHSound 17.5 % of clean control calibration beats are unmatched, so randomised tie-breaking at the matched
+   threshold capped B6's rejection. Now every tied beat is rejected wherever > 5 % of calibration beats tie (B6 on
+   ZCHSound, B6pn on CirCor/ZCHSound only; calibration rejection 17.5 % instead of 10 %). B6 then over-rejects ZCHSound
+   PFO (OR 2.74, Holm-significant; E2 clean +19 pp) and PDA (OR 1.84, not significant after Holm). After heart-rate and
+   age adjustment the PFO effect drops to OR 1.58 (not significant; heart rate alone OR 1.72, significant), so B6's PFO
+   bias is mainly a heart-rate effect, consistent with its adult beat-duration limits. The adjusted verdict matrix is unchanged.
+7. **B6 retrained on PhysioNet only** (B6pn, `e*_*_b6pn*`). Without CirCor training it matches only 77 % of CirCor
    reference beats (vs 99 %). Its CirCor systolic-murmur over-rejection is essentially unchanged (+6.6 vs +6.8 pp at clean,
    E2; independence OR 1.33). Its premature-beat over-rejection is smaller (+32 vs +61 pp) but still large. So B6's murmur bias
    is not an artefact of having seen CirCor.
@@ -168,8 +175,8 @@ Pathological minus normal, pp (95 % CI), matched threshold (`results/e1_raw.csv`
 |---|---|---|---|---|---|---|---|---|
 | CirCor systolic murmur | excl. | -0.8 (-3.2, +1.7) | -3.9 (-5.9, -1.7) | -4.8 (-8.0, -1.8) | +3.5 (-0.3, +7.5) | +4.7 (+0.7, +8.8) | +4.8 (+0.8, +8.7) | -6.7 (-11.2, -1.9) |
 | CirCor unknown | excl. | +18.7 (+12.3, +25.3) | +11.3 (+7.1, +15.4) | +28.5 (+20.8, +35.4) | +25.4 (+18.3, +32.2) | +28.6 (+21.2, +36.9) | +28.6 (+21.6, +36.8) | +17.3 (+9.0, +25.0) |
-| ZCHSound VSD | +9.6 (+4.2, +15.0) | +3.6 (-1.0, +8.0) | +20.8 (+13.7, +27.3) | +11.7 (+5.3, +18.5) | +16.5 (+10.2, +23.3) | +1.2 (-2.1, +4.7) | +0.9 (-2.4, +4.1) | +25.3 (+17.9, +32.5) |
-| ZCHSound PFO | +22.8 (+13.5, +32.9) | +9.6 (+2.0, +17.3) | +32.5 (+22.6, +42.9) | +35.5 (+24.7, +46.0) | +48.6 (+38.6, +58.9) | +17.3 (+10.5, +23.8) | +16.8 (+10.7, +23.0) | +14.3 (+3.9, +24.8) |
+| ZCHSound VSD | +9.6 (+4.2, +15.0) | +3.6 (-1.0, +8.0) | +20.8 (+13.7, +27.3) | +11.7 (+5.3, +18.5) | +16.5 (+10.2, +23.3) | +1.8 (-3.3, +7.4) | +1.4 (-3.8, +6.9) | +25.3 (+17.9, +32.5) |
+| ZCHSound PFO | +22.8 (+13.5, +32.9) | +9.6 (+2.0, +17.3) | +32.5 (+22.6, +42.9) | +35.5 (+24.7, +46.0) | +48.6 (+38.6, +58.9) | +28.3 (+17.8, +38.7) | +29.0 (+18.6, +39.5) | +14.3 (+3.9, +24.8) |
 | BMD-HS multi (confounded) | +21.8 (+10.7, +33.8) | +2.9 (-4.3, +9.3) | +5.1 (-1.4, +11.7) | +7.3 (-5.0, +19.0) | +14.6 (+4.4, +25.2) | +33.5 (+19.1, +47.2) | +33.6 (+19.1, +47.4) | +23.7 (+12.5, +34.6) |
 | PASCAL murmur | -6.4 (-20.5, +7.7) | +12.5 (-3.2, +25.9) | -2.9 (-15.8, +10.3) | +11.7 (-4.5, +28.5) | +19.5 (+4.0, +34.8) | +13.2 (-1.0, +27.7) | +13.0 (-1.0, +27.7) | +21.4 (+4.8, +36.6) |
 | PASCAL extrasystole | -30.0 (-39.9, -19.0) | -22.1 (-34.0, -8.3) | -22.1 (-33.4, -9.2) | -25.1 (-38.0, -9.7) | -28.2 (-39.5, -14.8) | -16.7 (-26.5, -6.3) | -15.7 (-25.7, -5.3) | -13.6 (-27.7, +2.4) |
@@ -207,9 +214,9 @@ Pooled pathological classes minus normal, matched threshold, pp (95 % CI) (`resu
 | CirCor | E1 raw | excl. | -1.0 (-3.2, +1.4) | -4.0 (-6.1, -1.7) | -5.0 (-7.8, -1.6) | +3.4 (-0.6, +7.8) | -3.4 (-6.1, -0.4) | +5.4 (+1.4, +9.8) | -5.8 (-10.0, -1.0) |
 | CirCor | E2 clean | excl. | -0.4 (-2.5, +2.0) | -2.9 (-4.9, -0.5) | -2.7 (-5.1, -0.1) | +6.2 (+2.6, +10.1) | -1.9 (-4.2, +0.8) | +7.3 (+3.6, +11.8) | -2.1 (-4.7, +0.8) |
 | CirCor | E2 10 dB | excl. | +0.4 (-2.4, +3.3) | -5.1 (-7.5, -2.0) | +1.0 (-2.6, +4.9) | +9.1 (+4.7, +13.8) | -2.4 (-5.6, +0.9) | +6.4 (+1.6, +11.7) | -2.5 (-6.6, +1.8) |
-| ZCHSound | E1 raw | +12.3 (+8.2, +16.5) | +4.4 (+0.8, +7.8) | +24.1 (+19.0, +29.2) | +18.7 (+13.6, +24.4) | +23.9 (+18.7, +29.4) | +20.7 (+16.2, +25.8) | +5.5 (+2.6, +8.4) | +18.7 (+13.3, +24.3) |
-| ZCHSound | E2 clean | +7.1 (+4.1, +10.1) | +3.3 (-0.2, +7.0) | +19.6 (+13.7, +25.3) | +15.5 (+10.2, +21.4) | +19.0 (+14.1, +24.2) | +18.9 (+14.0, +24.0) | +2.7 (-0.3, +5.5) | +8.4 (+4.6, +12.3) |
-| ZCHSound | E2 10 dB | +5.6 (+1.2, +10.0) | +0.1 (-3.7, +3.6) | +6.3 (+3.4, +9.0) | +10.4 (+6.9, +14.3) | +8.6 (+6.1, +11.4) | +12.6 (+9.0, +16.6) | +1.7 (-1.0, +4.3) | +9.8 (+4.8, +14.6) |
+| ZCHSound | E1 raw | +12.3 (+8.2, +16.5) | +4.4 (+0.8, +7.8) | +24.1 (+19.0, +29.2) | +18.7 (+13.6, +24.4) | +23.9 (+18.7, +29.4) | +20.7 (+16.2, +25.8) | +9.2 (+4.6, +13.7) | +18.7 (+13.3, +24.3) |
+| ZCHSound | E2 clean | +7.1 (+4.1, +10.1) | +3.3 (-0.2, +7.0) | +19.6 (+13.7, +25.3) | +15.5 (+10.2, +21.4) | +19.0 (+14.1, +24.2) | +18.9 (+14.0, +24.0) | +5.2 (+1.2, +9.2) | +8.4 (+4.6, +12.3) |
+| ZCHSound | E2 10 dB | +5.6 (+1.2, +10.0) | +0.1 (-3.7, +3.6) | +6.3 (+3.4, +9.0) | +10.4 (+6.9, +14.3) | +8.6 (+6.1, +11.4) | +12.6 (+9.0, +16.6) | +4.6 (+1.0, +8.7) | +9.8 (+4.8, +14.6) |
 | BMD-HS | E1 raw (confounded) | +19.6 (+8.9, +30.1) | +3.1 (-4.0, +9.4) | +4.2 (-2.1, +9.8) | +9.1 (-3.3, +20.3) | +14.4 (+3.9, +23.8) | +3.7 (-8.7, +13.4) | +32.5 (+18.3, +45.6) | +20.7 (+9.5, +30.8) |
 | BMD-HS | E2 clean | +15.7 (+8.5, +23.1) | +2.6 (-6.2, +9.9) | +1.8 (-3.6, +6.5) | +0.8 (-11.0, +11.5) | +4.5 (-3.0, +11.4) | -4.8 (-15.0, +3.8) | +26.8 (+13.4, +39.5) | +13.6 (+7.1, +19.4) |
 | BMD-HS | E2 10 dB | +3.0 (-9.4, +15.4) | -1.4 (-7.1, +4.7) | +2.1 (-1.8, +6.0) | -1.7 (-4.6, +1.4) | -2.1 (-4.9, +0.6) | +0.2 (-2.7, +3.2) | +2.4 (-2.2, +7.2) | +9.4 (+0.5, +17.9) |

@@ -18,6 +18,9 @@ DATASETS = ['circor', 'zch', 'bmdhs', 'pascal']
 NORMAL = {'normal', 'control'}
 NOT_PATH = NORMAL | {'unknown', 'murmur_patient_other_location', 'no_murmur_abnormal_outcome'}
 NB = 1000
+# option A (user decision): if more than 5 % of calibration beats sit exactly on the matched threshold, every tied
+# beat is rejected (calibration rejection then exceeds 10 %) instead of randomised tie-breaking, which capped B6
+TIE_MASS_MAX = 0.05
 # (dataset, model) pairs excluded from every table: B1 SVM's Platt-scaled score saturates near 0.75 and CirCor's
 # matched threshold (0.72) sits at that ceiling, so added noise cannot raise its rejection (see DEVIATIONS.md, fix 1)
 EXCLUDE = {('circor', 'b1_svm')}
@@ -104,9 +107,11 @@ def thresholds(e1, models):
             thr = float(np.percentile(v, 90, method='higher'))
             p_gt, p_eq = float((v > thr).mean()), float((v == thr).mean())
             q = float(np.clip((0.10 - p_gt) / p_eq, 0, 1)) if p_eq > 0 else 0.0
+            if p_eq > TIE_MASS_MAX:   # option A: a large tie (e.g. B6 unmatched beats = 1.0) is rejected in full
+                q = 1.0
             rows.append(dict(dataset=ds, model=m, published=PUBLISHED[m], matched=thr, tie_reject_prob=q,
                              frac_cal_at_threshold=p_eq, n_calibration_beats=len(cal), n_calibration_patients=cal.patient_id.nunique(),
-                             cal_reject_rate_matched=p_gt + q * p_eq,
+                             cal_reject_rate_matched=p_gt + q * p_eq, tie_rule='reject_all_ties' if p_eq > TIE_MASS_MAX else 'randomised',
                              cal_reject_rate_published=float((v > PUBLISHED[m]).mean())))
     t = pd.DataFrame(rows)
     t.to_csv(os.path.join(RES, 'c_thresholds.csv'), index=False)

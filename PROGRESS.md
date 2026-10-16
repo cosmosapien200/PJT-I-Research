@@ -1,4 +1,4 @@
-# Progress   (last updated: 2026-10-16 07:14)
+# Progress   (last updated: 2026-10-16 09:13)
 ## Datasets
 - [x] PhysioNet 2016: 3,153 records, 19.7 h, 2 kHz, 2,769 patient groups, 428 noise stretches
 - [x] CirCor 1.0.3: 3,163 recordings, 942 patients, 24,049 beats (<=8/recording), clean cut-off 10.1 dB
@@ -32,11 +32,12 @@
 - [x] Fix 3: ZCHSound re-segmented (paediatric HR); PFO OR after HR+age: B3 3.78*, B5 2.50*, B4 1.11
 - [x] Fix 4: covariate GEE + counts; late-systolic = 1 patient; exch vs indep GEE disagree in 30/209 near-null fits
 - [x] Fix 6: B6 retrained on PhysioNet only: CirCor beat match 77 % (vs 99 %), systolic-murmur gap +6.6 pp (vs +6.8)
+- [x] Option A tie rule: B6 ZCHSound PFO OR 2.74* unadjusted, 1.58 (n.s.) after HR+age; verdict matrix unchanged
 ## Blockers
 - B3 CardioPHON: repo lacks feature code -> 416 features re-implemented from column names (user request)
 - ZCHSound official site unreachable; used user-supplied GitHub mirror (clean subset)
 - B3 CardioPHON skipped: no feature-extraction code in repo
 - BMD-HS repo moved: used github.com/sani002/BMD-HS-Dataset
-- leakage check passed (final (after fixes))
+- leakage check passed (final (option A))
 - Segmenter HR cap (120 bpm) mis-segmented ZCHSound infants: fixed (paediatric range), ZCHSound rerun
-- integrity audit (src/verify.py): all 25 checks passed
+- integrity audit (src/verify.py): all 25 checks passed (after option A)

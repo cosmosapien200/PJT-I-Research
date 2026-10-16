@@ -15,7 +15,7 @@ import statsmodels.formula.api as smf
 from statsmodels.stats.multitest import multipletests
 from common import PROC, MAN, RES, stable_seed, BMD_ROOT
 from analysis import (all_scores, thresholds, add_rejections, rate_ci, drop_excluded, EXCLUDE, NORMAL, PUBLISHED,
-                      DATASETS, SENSITIVITY)
+                      DATASETS, SENSITIVITY, TIE_MASS_MAX)
 
 warnings.filterwarnings('ignore')
 HR_BANDS = [0, 80, 100, 120, 140, 400]
@@ -58,6 +58,8 @@ def weighted_matched(v, w, q=0.90):
     t = v[min(np.searchsorted(cw, q), len(v) - 1)]
     gt, eq = w[v > t].sum(), w[v == t].sum()
     p = float(np.clip((1 - q - gt) / eq, 0, 1)) if eq > 0 else 0.0
+    if eq > TIE_MASS_MAX:           # option A, as in the matched threshold
+        p = 1.0
     return float(t), p
 
 
