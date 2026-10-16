@@ -3,7 +3,7 @@ import os
 import numpy as np, pandas as pd
 from common import RES
 
-NAMES = {'b1_lr': 'B1 LR', 'b1_svm': 'B1 SVM', 'b2_rf': 'B2 RF', 'b4_cnn': 'B4 CNN', 'b5_crnn': 'B5 CRNN',
+NAMES = {'b1_lr': 'B1 LR', 'b1_svm': 'B1 SVM', 'b2_rf': 'B2 RF', 'b3_cardiophon': 'B3 CardioPHON', 'b4_cnn': 'B4 CNN', 'b5_crnn': 'B5 CRNN',
          'e6_cnn_balanced': 'E6 bal. CNN', 'b6a': 'B6a', 'b6b': 'B6b', 'b7': 'B7 SNR'}
 MAIN = {'circor': 'murmur_systolic', 'zch': 'VSD', 'bmdhs': 'multi', 'pascal': 'murmur'}
 

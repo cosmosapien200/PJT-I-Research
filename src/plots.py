@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 from common import LOGT, RES, FIG
 
 ORDER = ['none', '20', '10', '5', '0']
-NAMES = {'b1_lr': 'B1 LR', 'b1_svm': 'B1 SVM', 'b2_rf': 'B2 RF', 'b4_cnn': 'B4 CNN', 'b5_crnn': 'B5 CRNN',
+NAMES = {'b1_lr': 'B1 LR', 'b1_svm': 'B1 SVM', 'b2_rf': 'B2 RF', 'b3_cardiophon': 'B3 CardioPHON', 'b4_cnn': 'B4 CNN', 'b5_crnn': 'B5 CRNN',
          'e6_cnn_balanced': 'E6 balanced CNN', 'b6a': 'B6a', 'b6b': 'B6b', 'b7': 'B7 SNR'}
 
 

@@ -6,7 +6,7 @@ Train once unfiltered and once per quality model with training beats rejected at
 threshold removed. Early stopping on 15 % of training patients. Test on the unfiltered 40 %.
 Patient score = max over beats; sensitivity / specificity at 0.5, AUROC.
 """
-import os
+import os, sys
 import numpy as np, pandas as pd, torch
 from sklearn.metrics import roc_auc_score
 from common import PROC, MAN, RES, LOGT, SEED, stable_seed
@@ -38,6 +38,8 @@ def main():
     is_val = b.patient_id.isin(val_pat).values
     rows = []
     variants = ['unfiltered'] + [m for m in MODELS if m in b and m in thr.index]
+    if len(sys.argv) > 1:          # only these variants; merge into the existing results file
+        variants = [v for v in variants if v in sys.argv[1:]]
     for v in variants:
         keep = np.ones(len(b), bool) if v == 'unfiltered' else (b[f'{v}__matched'].values == 0)
         tr = np.flatnonzero((b.e5_split.values == 'e5_train') & ~is_val & keep)
@@ -55,7 +57,14 @@ def main():
                          auroc=roc_auc_score(pt.y, pt.p)))
         print(rows[-1], flush=True)
         del model; torch.cuda.empty_cache()
-    pd.DataFrame(rows).to_csv(os.path.join(RES, 'e5_downstream.csv'), index=False)
+    out = pd.DataFrame(rows)
+    p = os.path.join(RES, 'e5_downstream.csv')
+    if len(sys.argv) > 1 and os.path.exists(p):
+        old = pd.read_csv(p)
+        out = pd.concat([old[~old.filter_model.isin(out.filter_model)], out], ignore_index=True)
+        order = ['unfiltered'] + MODELS
+        out = out.sort_values('filter_model', key=lambda c: c.map({m: i for i, m in enumerate(order)}))
+    out.to_csv(p, index=False)
 
 
 if __name__ == '__main__':

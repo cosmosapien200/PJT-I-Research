@@ -43,7 +43,7 @@ At the same noise level, do quality filters reject pathological beats more often
 | B6a PCGKolect | 1 − beat confidence (no match → 1) | confidence 0.80 → score > 0.20 |
 | B6b PCGKolect + rhythm check | as B6a, and 1 if duration/rhythm check fails | score > 0.20 |
 | B7 SNR | −SNR dB | SNR < 14 dB → score > −14 |
-B3 (CardioPHON) is not implemented (no feature code in the repo; see DEVIATIONS.md).
+B3 (CardioPHON) was added after the first full analysis, at the user's request (re-implemented features; see DEVIATIONS.md); its threshold, metrics and tests are exactly those of the other models.
 The SVM is the B1 model used in the bias experiments; LR is reported alongside.
 
 ## Thresholds
@@ -85,3 +85,4 @@ The SVM is the B1 model used in the bias experiments; LR is reported alongside.
   90th percentile (an observed value) and beats exactly at it are rejected with the probability that makes the
   calibration rejection exactly 10 % (uniform number from a hash of the beat ID, identical across noise levels).
   The plan's intent (reject 10 % of clean calibration normal beats) is unchanged; only tie handling was unspecified.
+- 2026-10-16: B3 CardioPHON added to every table after the other results were seen (user request). It uses the same thresholds/tests; Holm correction now spans 10 models, which slightly changes adjusted p-values of the other models.

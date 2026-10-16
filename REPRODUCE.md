@@ -38,11 +38,13 @@ $PY prep_test.py synth
 $PY leakage.py "end of Phase A"
 $PY cache_features.py pn_windows_audio.npy pn
 $PY classic.py                        # B1, B2 (5-fold CV + final)
+OMP_NUM_THREADS=1 $PY cache_b3.py      # B3 CardioPHON features (416) on the corpus
+OMP_NUM_THREADS=1 $PY b3_train.py      # B3 (5-fold CV + final)
 for m in b4_cnn b5_crnn e6_cnn_balanced; do $PY deep.py $m; done
 $PY score.py pn
 for ds in circor synth bmdhs pascal zch; do $PY score.py e1 $ds; $PY score.py e2 $ds; done
 $PY leakage.py "before Phase E"
-$PY analysis.py                       # thresholds, E1-E4, E6, GEE
+$PY analysis.py                       # thresholds, E1-E4, E6, GEE  (score.py runs B3 by default; export OMP_NUM_THREADS=1)
 $PY e5.py
 $PY plots.py
 $PY leakage.py "final"

@@ -14,7 +14,7 @@ from common import PROC, MODELS, WIN, stable_seed, add_noise
 from noise_banks import load_bank, noise_segment
 
 SC = os.path.join(PROC, 'scores'); os.makedirs(SC, exist_ok=True)
-ALL = ['b1_lr', 'b1_svm', 'b2_rf', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6', 'b7']
+ALL = ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6', 'b7']
 SNRS = [20, 10, 5, 0]
 
 
@@ -82,6 +82,15 @@ def run(exp, ds, models):
             for m in need_f:
                 clf = joblib.load(os.path.join(MODELS, f'{m}.joblib'))
                 outs[m].append(clf.predict_proba(b1 if m.startswith('b1') else b2)[:, 1])
+        if 'b3_cardiophon' in models:
+            fp = os.path.join(SC, f'{exp}_{ds}_{level}_b3feats.npz')
+            if os.path.exists(fp):
+                F3 = np.load(fp)['X']
+            else:
+                import cardiophon_features as C3
+                F3 = C3.compute(X); np.savez(fp, X=F3)
+            F3 = F3.astype(np.float64); F3[~np.isfinite(F3)] = np.nan
+            outs['b3_cardiophon'].append(joblib.load(os.path.join(MODELS, 'b3_cardiophon.joblib')).predict_proba(F3)[:, 1])
         for m in models:
             if m in ('b4_cnn', 'b5_crnn', 'e6_cnn_balanced'):
                 import deep

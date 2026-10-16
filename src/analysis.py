@@ -11,7 +11,7 @@ from common import PROC, RES, MAN, SEED, stable_seed
 
 warnings.filterwarnings('ignore')
 SC = os.path.join(PROC, 'scores')
-MODELS = ['b1_lr', 'b1_svm', 'b2_rf', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b', 'b7']
+MODELS = ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b', 'b7']
 PUBLISHED = {m: 0.5 for m in MODELS} | {'b6a': 0.20, 'b6b': 0.20, 'b7': -14.0}
 DATASETS = ['circor', 'zch', 'bmdhs', 'pascal']
 NORMAL = {'normal', 'control'}
@@ -131,7 +131,7 @@ def table(df, models, by, level_col=None):
 
 def b_performance():
     rows = []
-    for m in ['b1_lr', 'b1_svm', 'b2_rf', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b', 'b7']:
+    for m in ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b', 'b7']:
         p = os.path.join(PROC, f'val_preds_{m}.csv')
         if not os.path.exists(p):
             continue
@@ -140,7 +140,7 @@ def b_performance():
         pr = s > PUBLISHED[m]
         fpr, tpr, _ = roc_curve(y, s)
         i = np.argmin(np.abs(fpr - (1 - tpr)))
-        ev = {'b1_lr': '5-fold out-of-fold', 'b1_svm': '5-fold out-of-fold', 'b2_rf': '5-fold out-of-fold',
+        ev = {'b1_lr': '5-fold out-of-fold', 'b1_svm': '5-fold out-of-fold', 'b2_rf': '5-fold out-of-fold', 'b3_cardiophon': '5-fold out-of-fold',
               'b6a': 'all windows (not trained on quality labels; seen in training)',
               'b6b': 'all windows (not trained on quality labels; seen in training)',
               'b7': 'all windows (annotation-based, not trained)'}.get(m, 'validation fold 0')

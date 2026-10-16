@@ -1,0 +1,14 @@
+seed: 42
+sample_rate_hz: 1000
+window_s: 6.0
+train_data: PhysioNet 2016 common corpus (5 s windows, extended to 6 s)
+score: higher = more likely unusable
+source: Despotovic, Pocta, Zgank, CardioPHON (BSPC 2025/26); features after Grooby
+  et al.; re-implemented (src/cardiophon_features.py)
+features: 416 (names as in the repo feature CSVs)
+selection: mutual_info_classif, top 20% (83)
+classifier: 'soft voting: GridSearchCV(SVC rbf, C [1,10,100], gamma [1e-4, scale,
+  auto], probability) + RF(200) + GB(200); no class weights'
+svm_subsample: 8000
+cv: 5-fold by patient
+published_threshold: 0.5
