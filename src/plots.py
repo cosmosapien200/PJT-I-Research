@@ -8,7 +8,7 @@ from common import LOGT, RES, FIG
 
 ORDER = ['none', '20', '10', '5', '0']
 NAMES = {'b1_lr': 'B1 LR', 'b1_svm': 'B1 SVM', 'b2_rf': 'B2 RF', 'b3_cardiophon': 'B3 CardioPHON', 'b4_cnn': 'B4 CNN', 'b5_crnn': 'B5 CRNN',
-         'e6_cnn_balanced': 'E6 balanced CNN', 'b6a': 'B6a', 'b6b': 'B6b', 'b7': 'B7 SNR'}
+         'e6_cnn_balanced': 'E6 balanced CNN', 'b6a': 'B6a', 'b6b': 'B6b', 'b7': 'B7 SNR', 'b6pna': 'B6pn-a (PN only)', 'b6pnb': 'B6pn-b (PN only)'}
 
 
 def training_curves():
@@ -87,11 +87,12 @@ def e5_figure():
     t = pd.read_csv(p)
     fig, ax = plt.subplots(figsize=(10, 4))
     x = np.arange(len(t))
-    ax.bar(x - 0.2, t.sensitivity, 0.4, label='sensitivity'); ax.bar(x + 0.2, t.specificity, 0.4, label='specificity')
-    ax.plot(x, t.auroc, 'k^', label='AUROC')
+    ax.bar(x - 0.27, t.auroc_mean, 0.27, yerr=t.auroc_sd, capsize=2, label='AUROC')
+    ax.bar(x, t.sensitivity_mean, 0.27, yerr=t.sensitivity_sd, capsize=2, label='sensitivity')
+    ax.bar(x + 0.27, t.specificity_mean, 0.27, yerr=t.specificity_sd, capsize=2, label='specificity')
     ax.set_xticks(x, [NAMES.get(m, m) for m in t.filter_model], rotation=30)
-    ax.set(ylim=(0, 1), title='E5: patient-level murmur detection, CirCor test 40 %, by training-set quality filter')
-    ax.legend(); fig.tight_layout(); fig.savefig(os.path.join(FIG, 'e5_downstream.png'), dpi=120); plt.close(fig)
+    ax.set(ylim=(0.5, 1), title='E5: patient-level murmur detection (mean over beats), CirCor test 40 %, mean +- SD of 3 seeds')
+    ax.legend(fontsize=8); fig.tight_layout(); fig.savefig(os.path.join(FIG, 'e5_downstream.png'), dpi=120); plt.close(fig)
 
 
 if __name__ == '__main__':

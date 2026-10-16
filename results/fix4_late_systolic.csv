@@ -1,0 +1,2 @@
+patient_id,split,murmur_locations,recording_locations,grade,shape,age,n_recordings,n_beats_by_class,n_clean_murmur_beats,e1_reject_b1_lr,e1_reject_b2_rf,e1_reject_b3_cardiophon,e1_reject_b4_cnn,e1_reject_b5_crnn,e1_reject_e6_cnn_balanced,e1_reject_b6a,e1_reject_b6b,e1_reject_b7,e1_reject_b6pna,e1_reject_b6pnb
+cc85132,eval,PV+TV,AV+PV+TV+MV,I/VI,Diamond,Child,4,"{'murmur_patient_other_location': 16, 'murmur_systolic': 16}",13,0.0,0.125,0.0,0.0,0.0625,0.0,0.0,0.0,0.0,0.1875,0.125

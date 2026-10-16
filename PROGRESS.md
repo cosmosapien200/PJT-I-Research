@@ -1,4 +1,4 @@
-# Progress   (last updated: 2026-10-16 06:12)
+# Progress   (last updated: 2026-10-16 07:14)
 ## Datasets
 - [x] PhysioNet 2016: 3,153 records, 19.7 h, 2 kHz, 2,769 patient groups, 428 noise stretches
 - [x] CirCor 1.0.3: 3,163 recordings, 942 patients, 24,049 beats (<=8/recording), clean cut-off 10.1 dB
@@ -23,12 +23,20 @@
 - [x] E2 equal noise: CirCor systolic murmur minus normal (clean): B6a +6.8 pp, B5 +6.2 pp, B1 SVM -3.5 pp; GEE OR B5 1.28*, B1 SVM 0.67*
 - [x] E3 breakdown: grade III/VI murmurs over-rejected by B6a +11.6 pp (E1); synthetic premature beats +61 pp (B6a, E2 clean)
 - [x] E4 by dataset: gap largest in ZCHSound (E2 clean +3 to +18 pp), none in PASCAL
-- [x] E5 downstream: murmur AUROC unfiltered 0.917, filtered 0.860-0.923
+- [x] E5 downstream (mean over beats, 3 seeds): AUROC unfiltered 0.909 +- 0.008, filtered 0.887-0.924
 - [x] E6 mitigation: rhythm check +8 pp extra on premature beats; balanced CNN does not close the ZCHSound gap (+18.1 vs +10.7 pp)
 - [x] D clean-beat pass rates: ZCHSound CHD 44-51 % vs control 69 %
 - [x] B3 bias: ZCHSound CHD over-rejected at equal noise (OR 1.5-5.3, all Holm-sig.); CirCor systolic murmur -2.9 pp
+- [x] Fix 1: B1 SVM excluded on CirCor (Platt score ceiling 0.75 at matched threshold 0.72; 0 dB rejection 18 %)
+- [x] Fix 2: pooled threshold rejects 0-3 % of BMD-HS/PASCAL clean normals; BMD multi B1/B6/B7 gap persists at published thr
+- [x] Fix 3: ZCHSound re-segmented (paediatric HR); PFO OR after HR+age: B3 3.78*, B5 2.50*, B4 1.11
+- [x] Fix 4: covariate GEE + counts; late-systolic = 1 patient; exch vs indep GEE disagree in 30/209 near-null fits
+- [x] Fix 6: B6 retrained on PhysioNet only: CirCor beat match 77 % (vs 99 %), systolic-murmur gap +6.6 pp (vs +6.8)
 ## Blockers
 - B3 CardioPHON: repo lacks feature code -> 416 features re-implemented from column names (user request)
 - ZCHSound official site unreachable; used user-supplied GitHub mirror (clean subset)
 - B3 CardioPHON skipped: no feature-extraction code in repo
 - BMD-HS repo moved: used github.com/sani002/BMD-HS-Dataset
+- leakage check passed (final (after fixes))
+- Segmenter HR cap (120 bpm) mis-segmented ZCHSound infants: fixed (paediatric range), ZCHSound rerun
+- integrity audit (src/verify.py): all 25 checks passed

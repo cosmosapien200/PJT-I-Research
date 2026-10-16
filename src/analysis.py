@@ -11,12 +11,25 @@ from common import PROC, RES, MAN, SEED, stable_seed
 
 warnings.filterwarnings('ignore')
 SC = os.path.join(PROC, 'scores')
-MODELS = ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b', 'b7']
-PUBLISHED = {m: 0.5 for m in MODELS} | {'b6a': 0.20, 'b6b': 0.20, 'b7': -14.0}
+MODELS = ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b', 'b7', 'b6pna', 'b6pnb']
+PUBLISHED = {m: 0.5 for m in MODELS} | {'b6a': 0.20, 'b6b': 0.20, 'b7': -14.0, 'b6pna': 0.20, 'b6pnb': 0.20}
+SENSITIVITY = {'b6pna', 'b6pnb'}   # fix 6 (B6 retrained on PhysioNet only): reported, not in the Holm family
 DATASETS = ['circor', 'zch', 'bmdhs', 'pascal']
 NORMAL = {'normal', 'control'}
 NOT_PATH = NORMAL | {'unknown', 'murmur_patient_other_location', 'no_murmur_abnormal_outcome'}
 NB = 1000
+# (dataset, model) pairs excluded from every table: B1 SVM's Platt-scaled score saturates near 0.75 and CirCor's
+# matched threshold (0.72) sits at that ceiling, so added noise cannot raise its rejection (see DEVIATIONS.md, fix 1)
+EXCLUDE = {('circor', 'b1_svm')}
+
+
+def drop_excluded(df):
+    if df is None or df.empty or 'model' not in df or 'dataset' not in df:
+        return df
+    bad = np.zeros(len(df), bool)
+    for ds, m in EXCLUDE:
+        bad |= (df.dataset.values == ds) & (df.model.values == m)
+    return df[~bad].reset_index(drop=True)
 
 
 # ---------------------------------------------------------------- loading
@@ -191,11 +204,19 @@ def gee(e2, models):
                     rows.append(base | dict(odds_ratio=np.nan, or_ci_lo=np.nan, or_ci_hi=np.nan, p=np.nan, cov_struct='', note='not converged'))
                     continue
                 cs_name, b, se, p = res
+                ind = {}
+                try:   # sensitivity: independence working correlation (patient-clustered robust SE) for every fit
+                    fi = smf.gee(form, 'patient_id', sub, family=sm.families.Binomial(), cov_struct=sm.cov_struct.Independence()).fit()
+                    bi, si = fi.params['path'], fi.bse['path']
+                    ind = dict(or_indep=np.exp(bi), or_indep_ci_lo=np.exp(bi - 1.96 * si), or_indep_ci_hi=np.exp(bi + 1.96 * si),
+                               p_indep=fi.pvalues['path'])
+                except Exception:
+                    pass
                 rows.append(base | dict(odds_ratio=np.exp(b), or_ci_lo=np.exp(b - 1.96 * se), or_ci_hi=np.exp(b + 1.96 * se),
-                                        p=p, cov_struct=cs_name, note=''))
-    g = pd.DataFrame(rows)
+                                        p=p, cov_struct=cs_name, note='') | ind)
+    g = drop_excluded(pd.DataFrame(rows))
     g['p_holm'] = np.nan
-    for (ds, c), idx in g.groupby(['dataset', 'cls']).groups.items():
+    for (ds, c), idx in g[~g.model.isin(SENSITIVITY)].groupby(['dataset', 'cls']).groups.items():
         ok = g.loc[idx, 'p'].notna()
         if ok.any():
             ii = g.loc[idx][ok].index
@@ -219,8 +240,8 @@ def main():
     pd.DataFrame(rows).rename(columns={'rate': 'clean_pass_rate'}).to_csv(os.path.join(RES, 'd_clean_pass_rates.csv'), index=False)
 
     # E1, E2
-    t1 = table(ev1, models, 'cls'); t1.to_csv(os.path.join(RES, 'e1_raw.csv'), index=False)
-    t2 = table(e2, models, 'cls', 'snr_level'); t2.to_csv(os.path.join(RES, 'e2_equal_noise.csv'), index=False)
+    t1 = drop_excluded(table(ev1, models, 'cls')); t1.to_csv(os.path.join(RES, 'e1_raw.csv'), index=False)
+    t2 = drop_excluded(table(e2, models, 'cls', 'snr_level')); t2.to_csv(os.path.join(RES, 'e2_equal_noise.csv'), index=False)
 
     # E3 breakdowns
     lab = extra_labels()
@@ -252,7 +273,7 @@ def main():
                 for m in models:
                     rows.append(dict(experiment=exp, dataset=ds, snr_level=lv, breakdown='class', value=c, model=m,
                                      threshold='matched') | rate_ci(g, f'{m}__matched', ref))
-    pd.DataFrame(rows).to_csv(os.path.join(RES, 'e3_breakdown.csv'), index=False)
+    drop_excluded(pd.DataFrame(rows)).to_csv(os.path.join(RES, 'e3_breakdown.csv'), index=False)
 
     # E4: pooled pathological vs normal per dataset
     rows = []
@@ -267,7 +288,7 @@ def main():
                                  pathological_classes='+'.join(sorted(path.cls.unique())), normal_rate=r0['rate'],
                                  pathological_rate=r['rate'], gap=r['diff_vs_normal'], gap_ci_lo=r['diff_ci_lo'],
                                  gap_ci_hi=r['diff_ci_hi'], n_path_patients=r['n_patients'], n_normal_patients=r0['n_patients']))
-    e4 = pd.DataFrame(rows); e4.to_csv(os.path.join(RES, 'e4_by_dataset.csv'), index=False)
+    e4 = drop_excluded(pd.DataFrame(rows)); e4.to_csv(os.path.join(RES, 'e4_by_dataset.csv'), index=False)
 
     # E6: (a) B6a vs B6b, (b) balanced CNN vs B4 on E2 (pooled gaps from E4 + per-class E2)
     e6 = e4[e4.model.isin(['b6a', 'b6b', 'b4_cnn', 'e6_cnn_balanced'])].copy()

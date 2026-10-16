@@ -95,17 +95,20 @@ def run(exp, ds, models):
             if m in ('b4_cnn', 'b5_crnn', 'e6_cnn_balanced'):
                 import deep
                 outs[m].append(deep.score(m, X))
-            elif m == 'b6':
+            elif m in ('b6', 'b6pn'):
                 import b6
-                outs[m].append(b6.score_beats(X, b.rel_start.values, b.rel_end.values).values)
+                outs[m].append(b6.score_beats(X, b.rel_start.values, b.rel_end.values,
+                                              b6.PN_ONLY if m == 'b6pn' else b6.RELEASE).values)
             elif m == 'b7':
                 import b7
                 outs[m].append(b7.score(X, b.record_id.values, b.centre.values - WIN // 2, seg))
         print(exp, ds, level, len(rows), 'windows', round(time.time() - t0), 's', flush=True)
     for m in models:
         v = np.concatenate(outs[m])
-        if m == 'b6':
+        if m in ('b6', 'b6pn'):
             cols = ['b6a', 'b6b', 'b6_conf', 'b6_matched', 'b6_ok_dur', 'b6_ok_rhythm']
+            if m == 'b6pn':
+                cols = [c.replace('b6', 'b6pn') for c in cols]
             for j, c in enumerate(cols):
                 np.save(os.path.join(SC, f'{exp}_{ds}_{c}.npy'), v[:, j])
         else:

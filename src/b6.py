@@ -19,20 +19,22 @@ import decode                     # noqa: E402  (PCGKolect_model/seg/decode.py)
 
 PAD_L = (segmodel.SAMPLES - WIN) // 2
 DEV = 'cuda' if torch.cuda.is_available() else 'cpu'
-_NET = None
+RELEASE = os.path.join(PCGK_ROOT, 'release', 'seg_final.pt')
+# fix 6: same architecture and recipe retrained on PhysioNet 2016 only (no CirCor), see DEVIATIONS.md
+PN_ONLY = os.path.join(os.path.dirname(PCGK_ROOT), 'PCGKolect_pnonly', 'runs', 'seg_pnonly_final.pt')
+_NET = {}
 
 
-def net():
-    global _NET
-    if _NET is None:
+def net(ckpt=RELEASE):
+    if ckpt not in _NET:
         fe, sn = segmodel.Frontend(), segmodel.SegNet()
-        sn.load_state_dict(torch.load(os.path.join(PCGK_ROOT, 'release', 'seg_final.pt'), map_location='cpu'))
-        _NET = torch.nn.Sequential(fe, sn).to(DEV).eval()
-    return _NET
+        sn.load_state_dict(torch.load(ckpt, map_location='cpu'))
+        _NET[ckpt] = torch.nn.Sequential(fe, sn).to(DEV).eval()
+    return _NET[ckpt]
 
 
 @torch.no_grad()
-def posteriors(W, bs=512):
+def posteriors(W, bs=512, ckpt=RELEASE):
     """W [N, 10000] -> P [N, 256, 5]."""
     out = []
     for i in range(0, len(W), bs):
@@ -40,7 +42,7 @@ def posteriors(W, bs=512):
         x = x / (np.abs(x).max(1, keepdims=True) + 1e-9)
         x = np.pad(x, ((0, 0), (PAD_L, segmodel.SAMPLES - WIN - PAD_L)), mode='reflect')
         x = highpass(x).astype(np.float32)
-        lg = net()(torch.from_numpy(x).to(DEV))[:, :, 0, :]          # [B, 5, T]
+        lg = net(ckpt)(torch.from_numpy(x).to(DEV))[:, :, 0, :]          # [B, 5, T]
         out.append(torch.softmax(lg, 1).transpose(1, 2).cpu().numpy())
     return np.concatenate(out)
 
@@ -80,8 +82,8 @@ def _parallel(items, nproc=10, chunk=256):
         return [r for p in ex.map(_decode_chunk, parts) for r in p]
 
 
-def score_beats(W, rel_start, rel_end):
-    P = posteriors(W)
+def score_beats(W, rel_start, rel_end, ckpt=RELEASE):
+    P = posteriors(W, ckpt=ckpt)
     res = _parallel([(P[i], int(rel_start[i]), int(rel_end[i])) for i in range(len(P))])
     return pd.DataFrame(res, columns=['b6a', 'b6b', 'b6_conf', 'b6_matched', 'b6_ok_dur', 'b6_ok_rhythm'])
 

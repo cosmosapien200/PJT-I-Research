@@ -1,19 +1,32 @@
-"""E5: downstream effect of quality filtering on a murmur classifier (CirCor).
+"""E5: downstream effect of quality filtering on a murmur classifier (CirCor), revised protocol.
 
 B4 CNN architecture, target = patient murmur Present (1) / Absent (0); Unknown excluded.
 CirCor non-calibration patients split 60/40 by patient (manifests/circor.csv: e5_split).
 Train once unfiltered and once per quality model with training beats rejected at that model's matched
-threshold removed. Early stopping on 15 % of training patients. Test on the unfiltered 40 %.
-Patient score = max over beats; sensitivity / specificity at 0.5, AUROC.
+threshold removed. 15 % of training patients (fixed, seeded) are held out from fitting: they drive early stopping
+and the choice of the decision threshold (Youden's J on their patient scores). Test on the unfiltered 40 %.
+Patient score = mean over beats. 3 seeds per variant (network init / batch order); report mean +- SD.
+Outputs: results/e5_downstream_seeds.csv (one row per variant x seed), results/e5_downstream.csv (mean, SD).
 """
 import os, sys
 import numpy as np, pandas as pd, torch
-from sklearn.metrics import roc_auc_score
-from common import PROC, MAN, RES, LOGT, SEED, stable_seed
+from sklearn.metrics import roc_auc_score, roc_curve
+from common import PROC, MAN, RES, LOGT, SEED
 import deep
-from analysis import load, MODELS, add_rejections
+from analysis import load, MODELS, add_rejections, EXCLUDE
 
 THR = os.path.join(RES, 'c_thresholds.csv')
+SEEDS = [SEED, SEED + 1, SEED + 2]
+
+
+def patient_scores(b, idx, p):
+    return pd.DataFrame(dict(patient_id=b.patient_id.values[idx], y=b.murmur_present.values[idx], p=p)) \
+        .groupby('patient_id').agg(y=('y', 'first'), p=('p', 'mean'))
+
+
+def youden(y, p):
+    fpr, tpr, t = roc_curve(y, p)
+    return float(t[np.argmax(tpr - fpr)])
 
 
 def main():
@@ -21,50 +34,56 @@ def main():
     man = pd.read_csv(os.path.join(MAN, 'circor.csv'))[['record_id', 'e5_split', 'murmur_present']]
     b = e1.merge(man, on='record_id')
     thr_all = pd.read_csv(THR)
-    thr = thr_all[thr_all.dataset == 'circor'].set_index('model').matched
-    b = add_rejections(b, thr_all, [m for m in MODELS if m in b and m in thr.index])
+    models = [m for m in MODELS if m in b and m in set(thr_all[thr_all.dataset == 'circor'].model) and ('circor', m) not in EXCLUDE]
+    b = add_rejections(b, thr_all, models)
     W = np.load(os.path.join(PROC, 'circor_beat_windows.npy'), mmap_mode='r')
-    use = b.e5_split.isin(['e5_train', 'e5_test']).values
-    sel = np.flatnonzero(use)
+    sel = np.flatnonzero(b.e5_split.isin(['e5_train', 'e5_test']).values)
     X = deep.prep_audio(W[sel])
     b = b.iloc[sel].reset_index(drop=True)
     y = b.murmur_present.values
     test = np.flatnonzero(b.e5_split.values == 'e5_test')
     train_all = np.flatnonzero(b.e5_split.values == 'e5_train')
-    tr_pat = np.array(sorted(b.patient_id.values[train_all].astype(str)))
-    tr_pat = np.unique(tr_pat)
+    tr_pat = np.unique(b.patient_id.values[train_all].astype(str))
     rng = np.random.default_rng(SEED)
     val_pat = set(rng.choice(tr_pat, int(round(0.15 * len(tr_pat))), replace=False))
     is_val = b.patient_id.isin(val_pat).values
-    rows = []
-    variants = ['unfiltered'] + [m for m in MODELS if m in b and m in thr.index]
-    if len(sys.argv) > 1:          # only these variants; merge into the existing results file
+    variants = ['unfiltered'] + models
+    if len(sys.argv) > 1:
         variants = [v for v in variants if v in sys.argv[1:]]
+    rows = []
     for v in variants:
         keep = np.ones(len(b), bool) if v == 'unfiltered' else (b[f'{v}__matched'].values == 0)
         tr = np.flatnonzero((b.e5_split.values == 'e5_train') & ~is_val & keep)
         va = np.flatnonzero((b.e5_split.values == 'e5_train') & is_val & keep)
-        model = deep.train_model(f'e5_{v}', X, y, tr, va, deep.CNN, log_path=os.path.join(LOGT, f'e5_murmur_{v}.csv'))
-        p = 1 / (1 + np.exp(-deep.predict_logits(model, X[test])))
-        pt = pd.DataFrame(dict(patient_id=b.patient_id.values[test], y=y[test], p=p)).groupby('patient_id').agg(y=('y', 'first'), p=('p', 'max'))
-        pr = pt.p >= 0.5
-        n_tr_all = int(((b.e5_split.values == 'e5_train')).sum())
-        rows.append(dict(filter_model=v, n_train_beats=len(tr) + len(va), frac_train_beats_kept=(len(tr) + len(va)) / n_tr_all,
-                         frac_train_murmur_beats_kept=keep[train_all][y[train_all] == 1].mean(),
-                         frac_train_absent_beats_kept=keep[train_all][y[train_all] == 0].mean(),
-                         n_test_patients=len(pt), n_test_murmur_patients=int(pt.y.sum()),
-                         sensitivity=pr[pt.y == 1].mean(), specificity=1 - pr[pt.y == 0].mean(),
-                         auroc=roc_auc_score(pt.y, pt.p)))
-        print(rows[-1], flush=True)
-        del model; torch.cuda.empty_cache()
-    out = pd.DataFrame(rows)
-    p = os.path.join(RES, 'e5_downstream.csv')
+        for sd in SEEDS:
+            model = deep.train_model(f'e5_{v}', X, y, tr, va, deep.CNN, seed=sd,
+                                     log_path=os.path.join(LOGT, f'e5_murmur_{v}_s{sd}.csv'))
+            pv = patient_scores(b, va, 1 / (1 + np.exp(-deep.predict_logits(model, X[va]))))
+            t = youden(pv.y, pv.p)
+            pt = patient_scores(b, test, 1 / (1 + np.exp(-deep.predict_logits(model, X[test]))))
+            pr = pt.p >= t
+            rows.append(dict(filter_model=v, seed=sd, n_train_beats=len(tr) + len(va),
+                             frac_train_beats_kept=keep[train_all].mean(),
+                             frac_train_murmur_beats_kept=keep[train_all][y[train_all] == 1].mean(),
+                             frac_train_absent_beats_kept=keep[train_all][y[train_all] == 0].mean(),
+                             n_val_patients=len(pv), threshold=t, n_test_patients=len(pt), n_test_murmur_patients=int(pt.y.sum()),
+                             auroc=roc_auc_score(pt.y, pt.p), sensitivity=pr[pt.y == 1].mean(), specificity=1 - pr[pt.y == 0].mean()))
+            print(v, sd, round(rows[-1]['auroc'], 3), flush=True)
+            del model; torch.cuda.empty_cache()
+    per = pd.DataFrame(rows)
+    p = os.path.join(RES, 'e5_downstream_seeds.csv')
     if len(sys.argv) > 1 and os.path.exists(p):
         old = pd.read_csv(p)
-        out = pd.concat([old[~old.filter_model.isin(out.filter_model)], out], ignore_index=True)
-        order = ['unfiltered'] + MODELS
-        out = out.sort_values('filter_model', key=lambda c: c.map({m: i for i, m in enumerate(order)}))
-    out.to_csv(p, index=False)
+        per = pd.concat([old[~old.filter_model.isin(per.filter_model)], per], ignore_index=True)
+    per.to_csv(p, index=False)
+    agg = per.groupby('filter_model', sort=False).agg(
+        frac_train_beats_kept=('frac_train_beats_kept', 'first'), frac_train_murmur_beats_kept=('frac_train_murmur_beats_kept', 'first'),
+        frac_train_absent_beats_kept=('frac_train_absent_beats_kept', 'first'), n_test_patients=('n_test_patients', 'first'),
+        n_test_murmur_patients=('n_test_murmur_patients', 'first'), n_seeds=('seed', 'size'),
+        auroc_mean=('auroc', 'mean'), auroc_sd=('auroc', 'std'), sensitivity_mean=('sensitivity', 'mean'),
+        sensitivity_sd=('sensitivity', 'std'), specificity_mean=('specificity', 'mean'), specificity_sd=('specificity', 'std')).reset_index()
+    order = {m: i for i, m in enumerate(['unfiltered'] + MODELS)}
+    agg.sort_values('filter_model', key=lambda c: c.map(order)).to_csv(os.path.join(RES, 'e5_downstream.csv'), index=False)
 
 
 if __name__ == '__main__':

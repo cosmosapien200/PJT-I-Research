@@ -76,16 +76,16 @@ def predict_logits(model, X, bs=256):
     return torch.cat(out).numpy()
 
 
-def train_model(name, X, y, tr, va, arch, sample_w=None, log_path=None, max_epochs=50, patience=5):
+def train_model(name, X, y, tr, va, arch, sample_w=None, log_path=None, max_epochs=50, patience=5, seed=SEED):
     """Generic trainer (also used for the E5 murmur classifier). Returns the best model (min val loss)."""
-    seed_all(SEED)
+    seed_all(seed)
     Xg = torch.from_numpy(X).to(DEV, torch.float16)
     yg = torch.from_numpy(y.astype(np.float32)).to(DEV)
     pw = torch.tensor((y[tr] == 0).sum() / max((y[tr] == 1).sum(), 1), device=DEV)
     lossf = nn.BCEWithLogitsLoss(pos_weight=pw)
     model = arch().to(DEV)
     opt = torch.optim.Adam(model.parameters(), lr=1e-3)
-    g = torch.Generator().manual_seed(SEED)
+    g = torch.Generator().manual_seed(seed)
     best, best_state, bad = np.inf, None, 0
     f = open(log_path, 'w', newline='') if log_path else None
     wr = csv.writer(f) if f else None

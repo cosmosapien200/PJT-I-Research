@@ -45,7 +45,15 @@ $PY score.py pn
 for ds in circor synth bmdhs pascal zch; do $PY score.py e1 $ds; $PY score.py e2 $ds; done
 $PY leakage.py "before Phase E"
 $PY analysis.py                       # thresholds, E1-E4, E6, GEE  (score.py runs B3 by default; export OMP_NUM_THREADS=1)
-$PY e5.py
+$PY e5.py                             # E5: mean-over-beats, Youden threshold on held-out training patients, 3 seeds
+$PY seg_validate.py                   # fix 3: segmenter heart-rate range check on PhysioNet
+$PY analysis_fixes.py                 # fixes 2-4: pooled/published recalibration, HR/age covariates, counts, late-systolic
+# fix 6 (optional): PhysioNet-only U-Net, in a copy of PCGKolect_model at data/raw/repos/PCGKolect_pnonly
+#   python seg/prep_seg.py --pn ../../physionet2016 --pn-ann ../../physionet2016/annotations/hand_corrected --out data/seg_corpus.npz
+#   python seg/prep_noise.py --esc50 ../../esc50 --speech ../../librispeech/LibriSpeech/dev-clean-2 --corpus data/seg_corpus.npz --out data/noise_bank.npz
+#   python seg/train_seg.py --final --tag _pnonly
+#   then: for ds in circor synth zch bmdhs pascal; do $PY score.py e1 $ds b6pn; $PY score.py e2 $ds b6pn; done; rerun analysis.py
 $PY plots.py
+$PY verify.py                         # integrity / leakage audit
 $PY leakage.py "final"
 ```

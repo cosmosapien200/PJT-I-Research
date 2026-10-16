@@ -40,15 +40,50 @@ def train():
 
 
 _M = None
+HR_ADULT = (30, 120)   # pyPCG default (adult populations: BMD-HS, PASCAL)
+HR_CHILD = (30, 220)   # paediatric populations (ZCHSound: neonates to adolescents); (30, 120) halves infant heart rates
+HR_RANGE = HR_ADULT
 
 
-def segment(x2k):
+def hr_sys(x, fs=1000, hr_range=HR_RANGE):
+    """Springer heart-rate / systole estimate (pyPCG _get_hr_sys) with a paediatric-capable range; the systole
+    search window [0.2 s, RR/2] is shrunk to [0.25 RR, RR/2] when RR/2 < 0.2 s (pyPCG fails there)."""
+    import scipy.signal as sgn
+    from pyPCG.lr_hsmm import _spike_removal, _h_envelope_feature
+    f = sgn.sosfiltfilt(sgn.butter(4, (25, 400), 'bandpass', output='sos', fs=fs), x)
+    h = _h_envelope_feature(_spike_removal(f, fs), fs)
+    y = h - h.mean()
+    c = sgn.correlate(y, y, method='fft')[len(h):]
+    c = c / (np.max(np.abs(c)) + 1e-12)
+    lo, hi = round(60 / hr_range[1] * fs), min(round(60 / hr_range[0] * fs), len(c) - 1)
+    hr = 60 / ((np.argmax(c[lo:hi]) + lo) / fs)
+    rr = 60 / hr * fs
+    smin = min(round(0.2 * fs), round(0.25 * rr))
+    smax = max(round(rr / 2), smin + 1)
+    return hr, (np.argmax(c[smin:smax]) + smin) / fs
+
+
+def segment(x2k, hr_range=HR_RANGE):
     global _M
     if _M is None:
         from pyPCG.lr_hsmm import LR_HSMM
         _M = LR_HSMM(); _M.load_model(MODEL)
+    from pyPCG.lr_hsmm import _generate_features, _get_duration_distributions, _expand_states
     x = resample_poly(np.asarray(x2k, np.float64), 1, 2)
-    st, _ = _M.segment_single(x, recalc_timing=True)
+    if tuple(hr_range) == HR_ADULT:     # original pyPCG path (identical to the first analysis)
+        _M.expected_hr_range = HR_ADULT
+        st, _ = _M.segment_single(x, recalc_timing=True)
+        return _states_to_segments(st, len(x2k))
+    F = np.array(_generate_features(x, _M.signal_fs, _M.feature_fs, _M.bandpass_frq), dtype=np.float64)
+    hr, sy = hr_sys(x, _M.signal_fs, hr_range)
+    _M.hsmm_model.durations = _get_duration_distributions(hr, sy, _M.feature_fs, _M.mean_s1_len, _M.mean_s2_len,
+                                                          _M.std_s1_len, _M.std_s2_len)
+    st = _expand_states(_M.hsmm_model.decode(F.T) + 1, _M.feature_fs, _M.signal_fs, len(x))
+    return _states_to_segments(st, len(x2k))
+
+
+def _states_to_segments(st, n2k):
+    x2k = np.empty(n2k)
     st = np.repeat(np.asarray(st, int), 2)[:len(x2k)]
     if len(st) < len(x2k):
         st = np.pad(st, (0, len(x2k) - len(st)), mode='edge')

@@ -180,7 +180,11 @@ def process_record(args):
     x = load_audio(r['path'])
     fail = ''
     try:
-        segs = circor_segments(r['record_id'], len(x)) if name == 'circor' else __import__('segmenter').segment(x)
+        if name == 'circor':
+            segs = circor_segments(r['record_id'], len(x))
+        else:
+            S = __import__('segmenter')
+            segs = S.segment(x, S.HR_CHILD if name == 'zch' else S.HR_ADULT)
     except Exception as e:
         segs, fail = [], f'segmenter_error:{type(e).__name__}'
     bts = beats_from_segments(segs)
