@@ -144,3 +144,11 @@ The SVM is the B1 model used in the bias experiments; LR is reported alongside.
   rhythm-shift AUROC (|AUROC - 0.5| of the noise score between clean fold-0 normal crops and the same crops after strong
   premature/irregular augmentation) is chosen; ties -> v4a. The chosen one is called B8v4 and tested once with the B8 criteria
   (C1-C3). This iteration is post hoc (B8's test results were seen) and is reported as such.
+
+## B8v4 outcome and third iteration B8c (disclosed; written before B8c is computed on any test set)
+* B8v4 candidates: neither passed C1 (fold-0 AUROC 0.809 v4a, 0.792 v4b); v4a selected by the fallback rule and reported.
+* B8c = combination of the noise scores of B8-noaug (a: noise-sensitive, rhythm-biased) and B8 (b: rhythm-robust, weak on
+  noise), no retraining. Candidates: geometric mean sqrt(a*b); arithmetic mean (a+b)/2; minimum min(a, b).
+* Selection on PhysioNet fold 0 only, same rule as v4: C1 >= 0.963 required; among passing candidates the smallest
+  |rhythm-shift AUROC - 0.5| (same 288 crops, same seed); ties -> geometric mean. If none passes C1, the candidate with the
+  highest fold-0 AUROC is reported as failing C1. The chosen B8c is tested once with C1-C3 and reported as post hoc.
