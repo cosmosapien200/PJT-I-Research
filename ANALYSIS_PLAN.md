@@ -90,3 +90,44 @@ The SVM is the B1 model used in the bias experiments; LR is reported alongside.
   every tied beat is rejected instead of randomised tie-breaking (affects B6 on ZCHSound and the B6pn variants only;
   calibration rejection 13.6-19.3 % instead of 10 %). Reason: B6 scores every unmatched beat 1.0, and randomised ties capped
   its rejection under noise. Applied to the pooled threshold in the same way.
+
+---
+
+# Pre-registration: B8 "PCGKolect-v3" (proposed filter), written 2026-10-16 BEFORE B8 is trained or scored on any test set
+
+## Motivation (from results already obtained)
+* Recording-level expert quality labels carry pathology bias (E0: SQI-0 rate 14.0 % abnormal vs 7.5 % normal), and B1-B5/E6
+  learn from them.
+* B6 rejects beats its HMM cannot decode confidently, so murmurs, premature/irregular beats and fast infant heart rates
+  look "unusable" (E2, fig 18).
+
+## Design (fixed now)
+1. Backbone: the PCGKolect 1-D U-Net and front-end (unchanged architecture, 5 frame classes S1/systole/S2/diastole/noise).
+2. Training data: PhysioNet 2016 only, same patient-grouped folds as B4/B5: train on folds 1-4, fold 0 held out for validation.
+   Bank-1 noise only (ESC-50, Mini LibriSpeech, PhysioNet noise stretches), noise clips from fold-0 records excluded from training.
+3. **No recording-level SQI labels are used.** "Noise" is learned only from frame-level (N...N) annotations and from synthetic
+   corruption (the repo's corruption recipe: partial / full overlays at -20...25 dB, pure-noise windows).
+4. **Rhythm/tempo augmentation** (label-aware, no pitch change): per training crop, diastole durations are rescaled by a
+   recording factor f ~ log-uniform(0.35, 1.4) (heart rates up to ~2.5x faster) times a per-beat jitter U(0.7, 1.3), and with
+   probability 0.15 a beat's diastole is shortened by a further 25-40 % (premature-like). 10 ms cross-fade at cuts.
+5. **Score = mean posterior of the noise class over the frames of the scored beat** (window-level: over the whole window).
+   No HMM decoding, no beat matching, no duration or rhythm rule enters the score.
+6. Training recipe: repo defaults (AdamW 2e-3, OneCycle, 12,000 steps, batch 64, label smoothing 0.05, spec-augment), seed 42.
+
+## Allowed development (PhysioNet only) and freeze
+* Exactly two trainings: B8 (as above) and the ablation B8-noaug (same without step 4). Only PhysioNet fold 0 and synthetic
+  rhythm sequences built from PhysioNet fold-0 clean normal records may be inspected. No hyper-parameter search.
+* The B8 configuration above is the one that goes to testing regardless of the development results; B8-noaug is reported as an ablation.
+
+## Evaluation (identical to the other filters)
+* Matched threshold per dataset (10 % of clean normal calibration beats; option-A tie rule), E1, E2, E3, E4, E5, GEE with and
+  without heart-rate/age adjustment. Holm correction across the 11-model family (B1 LR, B1 SVM, B2, B3, B4, B5, E6, B6a, B6b, B7, B8);
+  any verdict of the previous 10 models that changes because the family grew is reported.
+
+## Pre-specified success criteria
+* C1 (noise detection, PhysioNet): window AUROC on fold 0 >= 0.963 (B2, the fairest existing filter).
+* C2 (noise detection, test sets): AUROC clean vs 0 dB of the same beats >= 0.90 on each of the 4 test datasets.
+* C3 (fairness, primary): number of heartbeat conditions significantly over-rejected in the adjusted verdict matrix (15 conditions).
+* Claims: "B8 removes the diagnosed flaws" if C3 = 0 and C1, C2 hold. "B8 is the best filter overall" only if additionally its C3
+  is <= every other filter's and its C1 exceeds every filter with an equal or lower C3. Whatever the outcome, B8's results are
+  reported in full; a failure of any criterion is reported as such.

@@ -1,4 +1,4 @@
-# Progress   (last updated: 2026-10-16 09:13)
+# Progress   (last updated: 2026-10-16 11:27)
 ## Datasets
 - [x] PhysioNet 2016: 3,153 records, 19.7 h, 2 kHz, 2,769 patient groups, 428 noise stretches
 - [x] CirCor 1.0.3: 3,163 recordings, 942 patients, 24,049 beats (<=8/recording), clean cut-off 10.1 dB
@@ -17,6 +17,7 @@
 - [x] B6a / B6b PCGKolect (all PN windows, seen in training): 0.924 / 0.839, 0.921 / 0.834
 - [x] B7 SNR (all PN windows, annotation-based): 0.805 / 0.730
 - [x] E6 balanced CNN (fold 0): 0.982 / 0.915
+- [ ] B8 PCGKolect-v3 (proposed): pre-registered in ANALYSIS_PLAN.md, training
 ## Experiments (one key number each)
 - [x] E0 label check: SQI-0 rate normal 7.5% vs abnormal 14.0%
 - [x] E1 raw: ZCHSound pooled CHD minus control, B5 CRNN +27.4 pp (22.7, 32.0)
