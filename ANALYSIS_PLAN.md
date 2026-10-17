@@ -152,3 +152,66 @@ The SVM is the B1 model used in the bias experiments; LR is reported alongside.
 * Selection on PhysioNet fold 0 only, same rule as v4: C1 >= 0.963 required; among passing candidates the smallest
   |rhythm-shift AUROC - 0.5| (same 288 crops, same seed); ties -> geometric mean. If none passes C1, the candidate with the
   highest fold-0 AUROC is reported as failing C1. The chosen B8c is tested once with C1-C3 and reported as post hoc.
+
+---
+
+# Post-hoc analyses (2026-10-17): seed robustness and hybrid filters
+
+Both analyses were requested after every result above had been seen; they are **post hoc** and reported as such.
+Written before any new test-set score (new seeds, S1+S2-referenced E2, synthetic_regular, hybrids) was computed.
+
+## Shared additions (apply to every model in both analyses)
+* **E2s, S1+S2-referenced SNR variant of E2.** Identical to E2 (same clean evaluation beats, same Bank-2 clip and offset per
+  beat, same levels 20/10/5/0 dB, same matched thresholds), except the noise is scaled against the power of the clean window
+  inside its S1 and S2 segments instead of the whole-window power: P(S1+S2 samples) / P(noise) = SNR. Segments = the
+  reference segmentation used by B7 (annotations or the fixed Springer segmenter), every S1/S2 lying fully inside the 5 s
+  window; if none, the scored beat's own S1 and S2. Reason: window power includes murmur energy, so at the same window SNR
+  a murmur beat receives louder noise relative to its heart sounds than a normal beat. Both variants are reported; E2 stays
+  the pre-registered primary.
+* **synthetic_regular.** A construction control for the synthetic rhythm sets: the same 300 source recordings and the same
+  splicing code, every beat kept at its own length (no premature shift, no RR change); up to 4 inner beats per sequence are
+  scored. Built after the two existing kinds with the same generator, so their beats are unchanged (checked bit-for-bit).
+  Extra contrasts: synthetic_premature vs synthetic_regular and synthetic_irregular vs synthetic_regular (GEE as for the
+  other contrasts). The pre-registered 15 conditions (vs normal) are unchanged.
+
+## Task 1: seed robustness
+* Retrain B4 CNN, B5 CRNN and E6 balanced CNN with seeds 43 and 44 (seed 42 = existing models); same data, folds,
+  hyper-parameters and early stopping. Refit B2 RF and B3 CardioPHON with seeds 43 and 44: the random_state of their
+  random forests / gradient boosting / SVM Platt CV changes; data, MI feature selection (random_state 42) and SVM subsample
+  are unchanged. B1, B6, B7 and B8 variants are deterministic or not reseeded and are identical in every seed.
+* For each seed s, a full replicate: Phase B metrics, matched thresholds (same calibration patients), E1, E2, E2s, E3, E4,
+  and the GEE (unadjusted, + HR + HR², + age) with Holm across the main model family, where each seeded model enters with
+  its seed-s fit.
+* Report mean ± SD over the 3 seeds for every metric and rejection gap (`results/*_seeds.csv`).
+* **Seed-robust verdict.** A cell is "biased against" (or "keeps more") only if (i) it is Holm-significant (p_holm < 0.05)
+  with OR > 1 (< 1) in at least 2 of 3 seeds AND (ii) the pooled GEE over the three seeds (same formula + C(seed), clusters =
+  patients, observations of all seeds in the patient's cluster; Holm across the same family) is significant in the same
+  direction. Otherwise "no significant difference". For deterministic models the pooled fit is their single fit.
+* Figures: seed means; intervals are seed-averaged 95 % bootstrap CIs; markers show seed-robust significance. "fair" is
+  renamed "no significant difference" everywhere.
+
+## Task 2: hybrid hypothesis, periodicity (Das, B2) + deep model (pre-specified)
+Hypothesis: combining B2's periodicity features (noise-sensitive, pathology-blind) with B4/B5 (very noise-sensitive,
+pathology-biased) keeps the noise sensitivity of B4/B5 without their bias. Hybrids are built for **both** B4 and B5; none is
+chosen using test results. Training uses PhysioNet 2016 only, with the same 5 patient-grouped folds.
+* **Percentile scores.** For a test dataset, a model's score is converted to its percentile = mid-rank empirical CDF among
+  the dataset's clean normal calibration beats (as recorded; synthetic sets use CirCor's). On PhysioNet (Phase B), the
+  reference is the out-of-fold scores of usable windows of normal recordings in the four other folds.
+* **H-AND** (B4, B5): score = min(Das percentile, DL percentile); rejects only when both look noisy.
+* **H-CASCADE** (B4, B5): score = Das percentile if it is < 0.4 or > 0.9, otherwise the DL percentile (both on the same
+  percentile scale, so one matched threshold applies). Cut-offs 0.4 / 0.9 fixed now, not tuned.
+* **H-FUSE** (B4, B5): features = the 11 Das features + the deep model's penultimate embedding (128-d: B4 global average
+  pool, B5 mean BiLSTM output). Out-of-fold embeddings come from fold-specific deep models (train on 4 folds, early stopping
+  on the held-out fold; fold 0 = the main model). Classifier = random forest, 120 trees, max_features='sqrt',
+  class_weight='balanced', seed 42, trained on the out-of-fold features of all PhysioNet windows (validation: nested 5-fold,
+  RF trained on the other folds' out-of-fold features). Test embeddings come from the main deep model of the same seed.
+* Hybrid seed s uses the seed-s deep model(s) and, for H-AND / H-CASCADE, the seed-s B2; the H-FUSE forest keeps seed 42.
+* Every hybrid goes through the full benchmark like the other models: Phase B, matched thresholds (same rule, option-A
+  ties), E1, E2, E2s, E3, E4, synthetic contrasts vs synthetic_regular, covariate GEE, E5 (filter seeds 42-44 × E5 seeds
+  42-44), all with 3 seeds and the seed-robust verdict. Holm: each hybrid is added to the main 11-model family on its own
+  (as for B8v4 / B8c), so the existing models' verdicts do not depend on the hybrids.
+* **Read-out (pre-specified).** Noise sensitivity = mean rejection of noisy normal evaluation beats at 10 and 5 dB, CirCor +
+  ZCHSound, matched threshold (E2), mean over seeds. Bias = number of seed-robust "biased against" cells among the 15
+  conditions (adjusted verdict matrix) and mean |log OR| over those conditions (adjusted, pooled over seeds). The hypothesis
+  holds for a hybrid if it has 0 seed-robust biased cells and noise sensitivity at least that of B4/B5 minus 5 pp
+  (≥ min(B4, B5) − 0.05). If no hybrid meets this, that is reported plainly.
