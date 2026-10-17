@@ -6,8 +6,9 @@ from common import RES
 
 NAMES = {'b1_lr': 'B1 LR', 'b1_svm': 'B1 SVM', 'b2_rf': 'B2 RF', 'b3_cardiophon': 'B3 CardioPHON', 'b4_cnn': 'B4 CNN', 'b5_crnn': 'B5 CRNN',
          'e6_cnn_balanced': 'E6 bal. CNN', 'b6a': 'B6a', 'b6b': 'B6b', 'b7': 'B7 SNR', 'b6pna': 'B6pn-a (PN only)', 'b6pnb': 'B6pn-b (PN only)', 'b8': 'B8 PCGKolect-v3', 'b8noaug': 'B8 no-aug (ablation)', 'b8v4': 'B8v4 PCGKolect-v4', 'b8c': 'B8c PCGKolect-v3c',
-         'h_and_b4': 'H-AND B4', 'h_and_b5': 'H-AND B5', 'h_cas_b4': 'H-CASCADE B4', 'h_cas_b5': 'H-CASCADE B5', 'h_fuse_b4': 'H-FUSE B4', 'h_fuse_b5': 'H-FUSE B5'}
-SEEDED = {'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced'} | {m for m in NAMES if m.startswith('h_')}
+         'h_and_b4': 'H-AND B4', 'h_and_b5': 'H-AND B5', 'h_cas_b4': 'H-CASCADE B4', 'h_cas_b5': 'H-CASCADE B5', 'h_fuse_b4': 'H-FUSE B4', 'h_fuse_b5': 'H-FUSE B5',
+         'hd_avg': 'HD1 avg', 'hd_and': 'HD2 min', 'hd_lr': 'HD3 LR', 'hd_h4_l01': 'HD4 λ0.1', 'hd_h4_l03': 'HD4 λ0.3', 'hd_h4_l10': 'HD4 λ1.0'}
+SEEDED = {'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced'} | {m for m in NAMES if m.startswith(('h_', 'hd_'))}
 MAIN = {'circor': 'murmur_systolic', 'zch': 'VSD', 'bmdhs': 'multi', 'pascal': 'murmur'}
 
 

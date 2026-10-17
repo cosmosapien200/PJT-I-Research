@@ -24,8 +24,10 @@ MODELS = [('b1_lr', 'B1  Springer SQI (LR)'), ('b2_rf', 'B2  Das RF'), ('b3_card
           ('b4_cnn', 'B4  CNN'), ('b5_crnn', 'B5  CRNN'), ('e6_cnn_balanced', 'E6  balanced CNN'), ('b6a', 'B6  PCGKolect U-Net+HMM'),
           ('b7', 'B7  SNR rule'), ('b8', 'B8  PCGKolect-v3 (proposed)'), ('b8v4', 'B8v4  PCGKolect-v4'), ('b8c', 'B8c  PCGKolect-v3c'),
           ('h_and_b4', 'H-AND  Das ∧ B4'), ('h_and_b5', 'H-AND  Das ∧ B5'), ('h_cas_b4', 'H-CASCADE  Das → B4'),
-          ('h_cas_b5', 'H-CASCADE  Das → B5'), ('h_fuse_b4', 'H-FUSE  Das + B4 emb.'), ('h_fuse_b5', 'H-FUSE  Das + B5 emb.')]
-HYB = {m for m, _ in MODELS if m.startswith('h_')}
+          ('h_cas_b5', 'H-CASCADE  Das → B5'), ('h_fuse_b4', 'H-FUSE  Das + B4 emb.'), ('h_fuse_b5', 'H-FUSE  Das + B5 emb.'),
+          ('hd_avg', 'HD1  avg(Das, B4)'), ('hd_and', 'HD2  min(Das, B4)'), ('hd_lr', 'HD3  LR Das + B4 emb.'),
+          ('hd_h4_l01', 'HD4  λ0.1 (chosen)'), ('hd_h4_l03', 'HD4  λ0.3'), ('hd_h4_l10', 'HD4  λ1.0')]
+HYB = {m for m, _ in MODELS if m.startswith(('h_', 'hd_'))}
 COLS = [  # (dataset, class, label, group)
     ('circor', 'murmur_systolic', 'Systolic\nmurmur', 'CirCor (children, murmurs)'),
     ('circor', 'murmur_diastolic', 'Diastolic\nmurmur*', 'CirCor (children, murmurs)'),
@@ -95,7 +97,7 @@ def ytick_labels(ax):
     ax.set_yticks(range(len(MODELS)), [m[1] + ('  (3 seeds)' if (m[0] in SEEDED or m[0] in HYB) else '') for m in MODELS], fontsize=9.5)
     for t, (m, _) in zip(ax.get_yticklabels(), MODELS):
         if m in HYB:
-            t.set_color('#4a3aa7')
+            t.set_color('#0f8a8a' if m.startswith('hd_') else '#4a3aa7')
 
 
 def fig1(e2, a):
@@ -108,7 +110,7 @@ def fig1(e2, a):
     ci['ci2'] = ((ci.npos >= 2) | (ci.nneg >= 2)).astype(float)
     CI = matrix(ci, 'ci2', cols)
     V = matrix(a[(a.variant == 'E2') & (a.adjustment == 'unadjusted')], 'verdict_code', cols)
-    fig, ax = plt.subplots(figsize=(17.5, 9.4))
+    fig, ax = plt.subplots(figsize=(17.5, 9.4 * len(MODELS) / 17))
     norm = TwoSlopeNorm(vcenter=0, vmin=-30, vmax=30)
     ax.imshow(np.clip(D, -30, 30), cmap=CMAP, norm=norm, aspect='auto')
     for i in range(D.shape[0]):
@@ -152,7 +154,7 @@ def fig2(a, variant='E2', name='summary_2_verdict_matrix.png'):
     V, OR = matrix(a, 'verdict_code', cols), matrix(a, 'pooled_odds_ratio', cols)
     N, SP, SN = matrix(a, 'n_path_patients', cols), matrix(a, 'n_sig_pos', cols), matrix(a, 'n_sig_neg', cols)
     colors = {1: RED, 0: '#e4e3df', -1: BLUE}
-    fig, ax = plt.subplots(figsize=(18, 10.2))
+    fig, ax = plt.subplots(figsize=(18, 10.2 * len(MODELS) / 17))
     for i in range(V.shape[0]):
         for j in range(V.shape[1]):
             v = V[i, j]
@@ -201,7 +203,7 @@ def fig3(V):
     names = [m[1] for m in MODELS]
     over = np.nansum(V == 1, 1); fair = np.nansum(V == 0, 1); under = np.nansum(V == -1, 1)
     order = np.argsort(-over * 100 - under, kind='stable')[::-1]
-    fig, ax = plt.subplots(figsize=(11.5, 7.2))
+    fig, ax = plt.subplots(figsize=(11.5, 7.2 * len(MODELS) / 17))
     y = np.arange(len(names))
     for k, (vals, col, lab) in enumerate(((over, RED, 'removes pathology MORE (biased against)'), (fair, '#cfcdc8', 'no significant difference'),
                                          (under, BLUE, 'removes pathology LESS'))):
@@ -214,7 +216,7 @@ def fig3(V):
     ax.set_yticks(y, [names[i] for i in order]); ax.tick_params(length=0)
     for t, i in zip(ax.get_yticklabels(), order):
         if MODELS[i][0] in HYB:
-            t.set_color('#4a3aa7')
+            t.set_color('#0f8a8a' if MODELS[i][0].startswith('hd_') else '#4a3aa7')
     ax.set_xlabel('number of heartbeat conditions (out of 15)')
     for s in ('top', 'right', 'left'):
         ax.spines[s].set_visible(False)

@@ -1,7 +1,7 @@
 # Do heart-sound quality filters throw away the sick heartbeats?
 
 **Pathology bias in phonocardiogram (PCG) quality filters**: an implementation and evaluation of 7 published or
-baseline quality filters (plus six Das + deep-model hybrids) on 4 independent heart-sound datasets plus synthetic irregular
+baseline quality filters (plus six Das + deep-model hybrids and six debiased Das + B4 hybrids) on 4 independent heart-sound datasets plus synthetic irregular
 rhythms. Learned filters are evaluated over 3 training seeds; a bias counts only if it is seed-robust.
 
 > Heart-sound research pipelines automatically discard recordings or beats that look "too noisy".
@@ -20,6 +20,7 @@ rhythms. Learned filters are evaluated over 3 training seeds; a bias counts only
 | **Seeds matter** | Retraining with other seeds keeps AUROC within ±0.003 but moves deep-model gaps by up to ±7 pp; 7 of 31 seed-42 findings (3 of B5's biases, E6's ASD and three "keeps more premature" cells) do not replicate across seeds. |
 | **Lowest bias** | **B2** (Das et al. features + random forest) is pathology-blind (smallest class effects) but detects less noise (47 % vs B4's 66 % of noisy normal beats rejected). |
 | **Hybrid** | **H-FUSE-B4** (Das features + B4 embedding, random forest) keeps B4's noise sensitivity (65 %) with no seed-robust bias and smaller adjusted odds ratios than B4 (mean \|log OR\| 0.24 vs 0.35), but its raw clean-beat gaps stay at B4's level. B4 alone also has no seed-robust bias, so the hybrid's gain is modest. |
+| **Debiased hybrid** | **HD4 λ0.1** (B4 trunk + Das features, rhythm augmentation, adversary against the diagnosis; chosen on PhysioNet only) reaches B4-level noise sensitivity (67 %) with no seed-robust bias, but is **not less biased than B4**: same mean \|log OR\| (0.35), higher PFO odds ratio, and a new seed-robust bias against synthetic irregular rhythms vs regular ones. |
 | **Before any model** | The expert quality labels the filters learn from already mark abnormal recordings unusable twice as often (14.0 % vs 7.5 %). |
 | **Practical takeaway** | Check a quality filter's rejection rate **per diagnostic class, on clean beats, at a locally calibrated threshold** before using it for pathology research. |
 
@@ -53,6 +54,10 @@ hybrids. The same matrix with noise scaled to the S1+S2 power (E2s) is [fig12d](
 | **H-AND** Das ∧ B4 / Das ∧ B5 | none / none | 57 % / 56 % |
 | **H-CASCADE** Das → B4 / Das → B5 | none / none | 57 % / 54 % |
 | **H-FUSE** Das + B4 embedding | none | 65 % |
+| **HD1 / HD2** avg / min of Das and B4 percentiles | none / none | 56 % / 54 % |
+| **HD3** logistic regression, Das + B4 embedding | none | 48 % |
+| **HD4 λ0.1** B4 + Das, rhythm aug., adversary (chosen) | none | 67 % |
+| **HD4 λ0.3 / λ1.0** | PFO / PFO | 70 % / 64 % |
 | **B7** SNR rule (Giordano et al.) | VSD | 46 % |
 | **B5** CRNN (CNN + BiLSTM) | MR | 61 % |
 | **B8** PCGKolect-v3 (proposed earlier) | CirCor systolic murmur | 13 % |
@@ -120,9 +125,10 @@ Grey: unadjusted. Black: adjusted for heart rate (+ age). Pooled over 3 seeds. R
 | **E0** Label check | Experts labelled 14.0 % of abnormal vs 7.5 % of normal PhysioNet recordings unusable | [fig03](figures/paper/fig03_e0_label_check.png) |
 | Threshold transfer | Published 0.5 thresholds reject 73–82 % of clean normal CirCor beats for B2–B5, so thresholds must be calibrated per dataset | [fig05](figures/paper/fig05_threshold_transfer.png) |
 | **E3** Murmur grade/timing | B5/B6 over-reject loud (grade III/VI) and holosystolic murmurs most | [fig14](figures/paper/fig14_e3_murmur_grade_timing.png) |
-| **E5** Downstream | Training a murmur detector on filtered data changed AUROC by at most ±0.02 (unfiltered 0.909 ± 0.008, 3 seeds); hybrids 0.895-0.920 | [fig15](figures/paper/fig15_e5_downstream.png) |
+| **E5** Downstream | Training a murmur detector on filtered data changed AUROC by at most ±0.02 (unfiltered 0.909 ± 0.008, 3 seeds); hybrids 0.895-0.920, debiased hybrids 0.899-0.915 | [fig15](figures/paper/fig15_e5_downstream.png) |
 | **E6** Mitigation | B6's explicit rhythm check adds only ≈ 8 points of its 61-point premature-beat bias; balancing the training data did **not** remove the bias | [fig16](figures/paper/fig16_e6_mitigation_and_b6_retrain.png) |
 | **Hybrids** | Das + B4/B5 (AND, CASCADE, FUSE): H-FUSE-B4 keeps B4's noise sensitivity with no seed-robust bias; see "Hybrid hypothesis" in RESULTS.md | [fig22](figures/paper/fig22_noise_vs_bias.png) |
+| **Debiased hybrids** | HD1-HD4 (Das + B4; HD4 adversarially debiased): the chosen HD4 λ0.1 meets the B4-level noise / no-robust-bias read-out but is not less biased than B4; see "Hybrid" in RESULTS.md | [fig23](figures/paper/fig23_accuracy_vs_bias.png) |
 | **E2s** | Noise scaled to the S1+S2 power instead of the window power: same direction of every seed-robust bias | [fig09c](figures/paper/fig09c_e2s_10dB_gap_heatmap.png), [fig12d](figures/paper/fig12d_verdict_matrix_e2s.png) |
 | B6 retrained without CirCor | Murmur bias unchanged (+6.6 vs +6.8 points), so it is not an artefact of having seen CirCor | [fig16](figures/paper/fig16_e6_mitigation_and_b6_retrain.png) |
 
@@ -172,6 +178,8 @@ Grey: unadjusted. Black: adjusted for heart rate (+ age). Pooled over 3 seeds. R
 | E6 | B4 trained with normal/abnormal-balanced usable data (mitigation) | deep |
 | H-AND / H-CASCADE | Das (B2) and B4 or B5 percentiles: min, or Das decides outside its 0.4–0.9 percentile band | hybrid |
 | H-FUSE | random forest on the 11 Das features + B4 or B5 penultimate embedding | hybrid |
+| HD1-HD3 | Das + B4: mean / min of percentiles; logistic regression on Das features + B4 embedding | debiased hybrid |
+| HD4 | B4 trunk + Das features, rhythm augmentation, gradient-reversal adversary on the diagnosis (λ 0.1 / 0.3 / 1.0) | debiased hybrid |
 | B6 | PCGKolect 1-D U-Net + duration-constrained HMM (released checkpoint) | deep segmentation |
 | B7 | SNR rule (Giordano et al.) | rule |
 
@@ -204,7 +212,7 @@ Every deviation from the original plan is logged in [`DEVIATIONS.md`](DEVIATIONS
 | [`DEVIATIONS.md`](DEVIATIONS.md) | Every deviation from the plan or the original papers, one line each |
 | [`REPRODUCE.md`](REPRODUCE.md) | Commands to rerun everything from the raw data |
 | [`AGENT_PLAN.md`](AGENT_PLAN.md) | The original study plan |
-| [`figures/paper/`](figures/paper/) | paper-ready figures (PNG + PDF), incl. fig22 noise sensitivity vs bias |
+| [`figures/paper/`](figures/paper/) | paper-ready figures (PNG + PDF), incl. fig22 noise sensitivity vs bias, fig23 accuracy vs bias |
 | [`results/`](results/) | Every CSV behind every number |
 
 ## Repository layout

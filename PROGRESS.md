@@ -1,4 +1,4 @@
-# Progress   (last updated: 2026-10-18 02:02)
+# Progress   (last updated: 2026-10-18 04:50)
 ## Datasets
 - [x] PhysioNet 2016: 3,153 records, 19.7 h, 2 kHz, 2,769 patient groups, 428 noise stretches
 - [x] CirCor 1.0.3: 3,163 recordings, 942 patients, 24,049 beats (<=8/recording), clean cut-off 10.1 dB
@@ -40,11 +40,14 @@
 - [x] Hybrid hypothesis: H-FUSE-B4 noise sensitivity 65.4 % (B4 65.5 %), 0 seed-robust biased cells, mean |log OR| 0.24 vs 0.35
 - [x] E2s (S1+S2-referenced noise): same direction for every seed-robust cell; 21 of 25 seed-42 cells robust
 - [x] E5 hybrids (3 filter x 3 E5 seeds): AUROC 0.895-0.920, all within 0.015 of unfiltered
+- [x] Debiased hybrids HD1-HD4 (branch hybrid-debias): none qualified on PhysioNet; fallback chose HD4 lambda 0.1 (AUROC 0.986)
+- [x] HD4 lambda 0.1 on test sets: noise sensitivity 66.8 % (B4 65.5 %), 0 seed-robust biased cells (E2), mean |log OR| 0.35 (= B4); new robust rhythm-vs-regular bias; E2s PFO biased
+- [x] HD E5 (3 filter x 3 E5 seeds): AUROC 0.899-0.915
 ## Blockers
 - B3 CardioPHON: repo lacks feature code -> 416 features re-implemented from column names (user request)
 - ZCHSound official site unreachable; used user-supplied GitHub mirror (clean subset)
 - B3 CardioPHON skipped: no feature-extraction code in repo
 - BMD-HS repo moved: used github.com/sani002/BMD-HS-Dataset
-- leakage check passed (final)
+- leakage check passed (hd final)
 - Segmenter HR cap (120 bpm) mis-segmented ZCHSound infants: fixed (paediatric range), ZCHSound rerun
 - integrity audit (src/verify.py): all 25 checks passed (after option A)

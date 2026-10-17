@@ -21,6 +21,10 @@ Retraining B4, B5 and E6 and refitting B2 and B3 with seeds 43 and 44 left Physi
 
 Six pre-specified hybrids of Das periodicity (B2) with B4 or B5 reached PhysioNet AUROC 0.970-0.977 (5-fold out-of-fold). H-FUSE-B4 (random forest on the 11 Das features + B4's penultimate embedding) matches B4's noise sensitivity (65.4 ± 2.2 % vs 65.5 ± 4.2 % of noisy normal beats rejected at 10 and 5 dB, CirCor + ZCHSound) with no seed-robust "biased against" cell and smaller adjusted class effects (mean |log OR| 0.24 vs 0.35 for B4), so it meets the pre-specified criterion; H-AND-B4 and H-CASCADE-B4 also have no biased cell but lose about 8 pp of noise sensitivity (57 %, still inside the pre-specified B4/B5 − 5 pp margin), and H-FUSE-B5 inherits two of B5's biases (MR, PFO). This is not a strict improvement over B4, which itself has no seed-robust biased cell: the hybrid's gain is smaller adjusted odds ratios, while its raw clean-beat gaps stay at B4's level (RMS 11.4 vs 11.6 pp; H-AND-B4 6.9 pp). Downstream (E5), every hybrid stays within 0.015 AUROC of the unfiltered murmur detector (0.895-0.920 vs 0.909); H-FUSE-B5 keeps only about 70 % of training beats in both classes but still reaches 0.910. Files: `results/noise_vs_bias.csv`, `figures/paper/fig22_noise_vs_bias.png`, verdict matrix `fig12a`.
 
+## Hybrid
+
+Debiased hybrids of Das (B2) and B4, pre-registered and trained on PhysioNet only (branch `hybrid-debias`): HD1 mean and HD2 min of the two percentile scores, HD3 a logistic regression on the Das features + B4 embedding, and HD4 a B4 trunk + Das features network trained with rhythm augmentation and a gradient-reversal adversary against the normal/abnormal label (λ 0.1, 0.3, 1.0), 3 seeds each. No candidate met the PhysioNet-only selection rule (fold-0 pathology and rhythm gap CIs including 0 in ≥ 2 of 3 seeds), so the fallback rule chose **HD4 λ0.1** (smallest summed gap among candidates within 0.01 AUROC of B4; AUROC 0.986 ± 0.001 vs B4 0.986, PhysioNet abnormal-vs-normal gap +11.0 vs +17.1 pp). On the test sets **it meets the pre-specified read-out: B4-level noise sensitivity (66.8 ± 3.9 % vs 65.5 ± 4.2 %, bar ≥ 60.5 %) and 0 seed-robust "biased against" cells among the 15 conditions (E2)**. But it is not less biased than B4, which also has 0: its adjusted class effects are as large (mean |log OR| 0.35, same as B4), its ZCHSound PFO odds ratio is higher (2.21 vs 1.84, Holm-significant in 2 of 3 seeds but not in the pooled fit; seed-robustly biased under E2s, OR 2.59), and unlike B4 it rejects AF-like and premature synthetic beats more often than the matched regular synthetic beats (OR 1.41 and 1.43, seed-robust), so the adversary and rhythm augmentation did not transfer from PhysioNet to the test sets. The other candidates trade noise sensitivity for smaller gaps (HD2 54 %, RMS clean gap 6.7 vs 11.6 pp for B4) or gain nothing; E5 AUROC stays 0.899-0.915 (unfiltered 0.909). Files: `results/hd_selection.csv`, `results/accuracy_vs_bias.csv`, `results/noise_vs_bias.csv`, `figures/paper/fig23_accuracy_vs_bias.png`.
+
 ## E2 (decisive): equal added noise, clean beats only
 
 **Main contrast, CirCor systolic murmur minus normal** (`results/e2_equal_noise.csv`, matched threshold):
@@ -259,9 +263,15 @@ Patient score = mean over beats; decision threshold = Youden's J on held-out tra
 | H-CASCADE-B5 | 86.9 % | 86.8 % | 0.895 ± 0.029 | 0.816 ± 0.056 | 0.831 ± 0.080 |
 | H-FUSE-B4 | 88.2 % | 83.4 % | 0.914 ± 0.009 | 0.843 ± 0.054 | 0.847 ± 0.057 |
 | H-FUSE-B5 | 69.8 % | 69.9 % | 0.910 ± 0.011 | 0.826 ± 0.096 | 0.832 ± 0.081 |
+| HD1 avg | 89.1 % | 86.7 % | 0.906 ± 0.016 | 0.833 ± 0.056 | 0.814 ± 0.105 |
+| HD2 min | 88.8 % | 86.3 % | 0.907 ± 0.024 | 0.824 ± 0.069 | 0.872 ± 0.042 |
+| HD3 LR | 85.8 % | 84.7 % | 0.899 ± 0.027 | 0.841 ± 0.072 | 0.786 ± 0.126 |
+| HD4 λ0.1 (chosen) | 88.0 % | 83.3 % | 0.915 ± 0.014 | 0.785 ± 0.064 | 0.906 ± 0.064 |
+| HD4 λ0.3 | 87.9 % | 83.6 % | 0.911 ± 0.016 | 0.806 ± 0.050 | 0.891 ± 0.045 |
+| HD4 λ1.0 | 88.2 % | 83.2 % | 0.911 ± 0.023 | 0.810 ± 0.077 | 0.876 ± 0.063 |
 
 B5 and B6 discard murmur training beats at a higher rate than murmur-absent beats, which matches their E1/E2 bias.
-Hybrid rows are mean ± SD over 3 filter seeds × 3 E5 seeds. Downstream AUROC stays within about ±0.02 of the unfiltered model for every filter. B6a gives the lowest murmur
+Hybrid and HD rows are mean ± SD over 3 filter seeds × 3 E5 seeds. Downstream AUROC stays within about ±0.02 of the unfiltered model for every filter. B6a gives the lowest murmur
 sensitivity (0.755 vs 0.815), a difference of about one seed-SD, so filtering did not clearly change murmur detection here.
 
 ## E6: mitigation
