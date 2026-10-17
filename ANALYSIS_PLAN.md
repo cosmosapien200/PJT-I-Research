@@ -215,3 +215,12 @@ chosen using test results. Training uses PhysioNet 2016 only, with the same 5 pa
   conditions (adjusted verdict matrix) and mean |log OR| over those conditions (adjusted, pooled over seeds). The hypothesis
   holds for a hybrid if it has 0 seed-robust biased cells and noise sensitivity at least that of B4/B5 minus 5 pp
   (≥ min(B4, B5) − 0.05). If no hybrid meets this, that is reported plainly.
+
+## Change after seeing results (2026-10-17, seed robustness)
+* The pooled fit over seeds was first run with an exchangeable working correlation (as every other GEE here). Its pooled odds
+  ratios fell outside the range of the three per-seed odds ratios (e.g. B3, ZCHSound PFO, HR + age: per seed 3.44-3.78, pooled
+  6.15): stacking three near-identical copies of every beat makes the within-patient correlation ~1, so the exchangeable
+  estimator re-weights towards patients and estimates a different quantity. The pooled fit now uses independence working
+  correlation (patient-clustered robust SEs; the estimand of the per-seed fits, averaged over seeds). The exchangeable pooled
+  OR and p are kept as sensitivity columns (pooled_exch_odds_ratio, pooled_exch_p). Per-seed fits are unchanged (exchangeable,
+  as pre-registered). Changed after seeing the first pooled verdicts.

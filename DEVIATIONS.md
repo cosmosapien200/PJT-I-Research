@@ -81,3 +81,4 @@
 - Hybrid Phase B metrics are 5-fold out-of-fold (B4/B5: fold 0 only), so they are not directly comparable to B4/B5's fold-0 numbers.
 - E5 for hybrids: 3 filter seeds x 3 E5 seeds (9 runs per hybrid); existing filters keep their 3 E5 seeds at filter seed 42 (E5 was not part of the seed-robustness request).
 - Training for the seed replicates ran with two jobs sharing the GPU for the first jobs, then one at a time; GPU non-determinism means a seed-42 retrain would not be bit-identical, which is why seed 42 reuses the original models.
+- Pooled seed GEE uses independence working correlation instead of exchangeable (changed after seeing results): with three near-identical replicates per beat the exchangeable estimator weights patients and gave pooled ORs outside the per-seed range (B3 ZCHSound PFO 6.15 vs 3.44-3.78). Exchangeable pooled results kept as sensitivity columns. See ANALYSIS_PLAN.md.
