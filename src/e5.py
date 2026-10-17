@@ -6,7 +6,10 @@ Train once unfiltered and once per quality model with training beats rejected at
 threshold removed. 15 % of training patients (fixed, seeded) are held out from fitting: they drive early stopping
 and the choice of the decision threshold (Youden's J on their patient scores). Test on the unfiltered 40 %.
 Patient score = mean over beats. 3 seeds per variant (network init / batch order); report mean +- SD.
-Outputs: results/e5_downstream_seeds.csv (one row per variant x seed), results/e5_downstream.csv (mean, SD).
+Outputs: results/e5_downstream_seeds.csv (one row per variant x filter seed x E5 seed), results/e5_downstream.csv (mean, SD over
+all runs of a filter).
+Post hoc: `python e5.py h_and_b4_s43 ...` runs a seeded filter (here hybrid H-AND-B4, filter seed 43) with the matched
+thresholds of that seed's replicate (results/c_thresholds_per_seed.csv); column filter_seed (42 for the original runs).
 """
 import os, sys
 import numpy as np, pandas as pd, torch
@@ -29,13 +32,28 @@ def youden(y, p):
     return float(t[np.argmax(tpr - fpr)])
 
 
+def split_tag(v):
+    """'h_and_b4_s43' -> ('h_and_b4', 43); 'b4_cnn' -> ('b4_cnn', 42)."""
+    base, _, s = v.rpartition('_s')
+    return (base, int(s)) if base and s.isdigit() else (v, SEED)
+
+
 def main():
-    e1 = load('e1', 'circor')
+    req = sys.argv[1:]
+    seeded = [v for v in req if split_tag(v)[1] != SEED]
+    e1 = load('e1', 'circor', {m: m for m in MODELS} | {v: v for v in seeded})
     man = pd.read_csv(os.path.join(MAN, 'circor.csv'))[['record_id', 'e5_split', 'murmur_present']]
     b = e1.merge(man, on='record_id')
     thr_all = pd.read_csv(THR)
     models = [m for m in MODELS if m in b and m in set(thr_all[thr_all.dataset == 'circor'].model) and ('circor', m) not in EXCLUDE]
     b = add_rejections(b, thr_all, models)
+    if seeded:   # matched thresholds of the seed-s replicate, applied to the seed-s scores
+        ps = pd.read_csv(os.path.join(RES, 'c_thresholds_per_seed.csv'))
+        for v in seeded:
+            m, sd = split_tag(v)
+            t = ps[(ps.seed == sd) & (ps.model == m)].assign(model=v)
+            b = add_rejections(b, t, [v])
+        models = models + seeded
     W = np.load(os.path.join(PROC, 'circor_beat_windows.npy'), mmap_mode='r')
     sel = np.flatnonzero(b.e5_split.isin(['e5_train', 'e5_test']).values)
     X = deep.prep_audio(W[sel])
@@ -48,8 +66,8 @@ def main():
     val_pat = set(rng.choice(tr_pat, int(round(0.15 * len(tr_pat))), replace=False))
     is_val = b.patient_id.isin(val_pat).values
     variants = ['unfiltered'] + models
-    if len(sys.argv) > 1:
-        variants = [v for v in variants if v in sys.argv[1:]]
+    if req:
+        variants = [v for v in variants if v in req]
     rows = []
     for v in variants:
         keep = np.ones(len(b), bool) if v == 'unfiltered' else (b[f'{v}__matched'].values == 0)
@@ -62,7 +80,7 @@ def main():
             t = youden(pv.y, pv.p)
             pt = patient_scores(b, test, 1 / (1 + np.exp(-deep.predict_logits(model, X[test]))))
             pr = pt.p >= t
-            rows.append(dict(filter_model=v, seed=sd, n_train_beats=len(tr) + len(va),
+            rows.append(dict(filter_model=split_tag(v)[0], filter_seed=split_tag(v)[1], seed=sd, n_train_beats=len(tr) + len(va),
                              frac_train_beats_kept=keep[train_all].mean(),
                              frac_train_murmur_beats_kept=keep[train_all][y[train_all] == 1].mean(),
                              frac_train_absent_beats_kept=keep[train_all][y[train_all] == 0].mean(),
@@ -72,14 +90,17 @@ def main():
             del model; torch.cuda.empty_cache()
     per = pd.DataFrame(rows)
     p = os.path.join(RES, 'e5_downstream_seeds.csv')
-    if len(sys.argv) > 1 and os.path.exists(p):
+    if req and os.path.exists(p):
         old = pd.read_csv(p)
-        per = pd.concat([old[~old.filter_model.isin(per.filter_model)], per], ignore_index=True)
+        if 'filter_seed' not in old:
+            old['filter_seed'] = SEED
+        key = lambda d: d.filter_model + '|' + d.filter_seed.astype(str)
+        per = pd.concat([old[~key(old).isin(key(per))], per], ignore_index=True)
     per.to_csv(p, index=False)
     agg = per.groupby('filter_model', sort=False).agg(
-        frac_train_beats_kept=('frac_train_beats_kept', 'first'), frac_train_murmur_beats_kept=('frac_train_murmur_beats_kept', 'first'),
-        frac_train_absent_beats_kept=('frac_train_absent_beats_kept', 'first'), n_test_patients=('n_test_patients', 'first'),
-        n_test_murmur_patients=('n_test_murmur_patients', 'first'), n_seeds=('seed', 'size'),
+        frac_train_beats_kept=('frac_train_beats_kept', 'mean'), frac_train_murmur_beats_kept=('frac_train_murmur_beats_kept', 'mean'),
+        frac_train_absent_beats_kept=('frac_train_absent_beats_kept', 'mean'), n_test_patients=('n_test_patients', 'first'),
+        n_test_murmur_patients=('n_test_murmur_patients', 'first'), n_filter_seeds=('filter_seed', 'nunique'), n_seeds=('seed', 'size'),
         auroc_mean=('auroc', 'mean'), auroc_sd=('auroc', 'std'), sensitivity_mean=('sensitivity', 'mean'),
         sensitivity_sd=('sensitivity', 'std'), specificity_mean=('specificity', 'mean'), specificity_sd=('specificity', 'std')).reset_index()
     order = {m: i for i, m in enumerate(['unfiltered'] + MODELS)}

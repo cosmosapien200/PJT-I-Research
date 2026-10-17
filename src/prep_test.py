@@ -257,7 +257,9 @@ def synth():
     recs = rng.permutation(src.record_id.unique())[:300]
     paths = dict(zip(man.record_id, [os.path.join(CIRCOR_ROOT, 'training_data', r + '.wav') for r in man.record_id]))
     rows, wins, seg_rows = [], [], []
-    for kind in ('synthetic_premature', 'synthetic_irregular'):
+    # synthetic_regular (post hoc, construction control): same splicing, every beat at its own length; generated last so
+    # the premature / irregular sets are unchanged
+    for kind in ('synthetic_premature', 'synthetic_irregular', 'synthetic_regular'):
         for rid in recs:
             x = load_audio(paths[rid])
             # all clean-quality beats of this recording (full annotation), in order
@@ -275,9 +277,11 @@ def synth():
                 if kind == 'synthetic_premature':
                     prem = rng.random() < 0.2 and len(out) > 0
                     target = L
-                else:
+                elif kind == 'synthetic_irregular':
                     prem = False
                     target = int(L * rng.uniform(0.7, 1.3))
+                else:
+                    prem, target = False, L
                 seg = x[b['start']:b['end']]
                 # fit to target length by trimming / extending diastole (reflection of the diastole tail)
                 min_keep = (b['dia_start'] - b['start']) + int(0.05 * FS)

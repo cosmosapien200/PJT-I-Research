@@ -53,7 +53,18 @@ $PY analysis_fixes.py                 # fixes 2-4: pooled/published recalibratio
 #   python seg/prep_noise.py --esc50 ../../esc50 --speech ../../librispeech/LibriSpeech/dev-clean-2 --corpus data/seg_corpus.npz --out data/noise_bank.npz
 #   python seg/train_seg.py --final --tag _pnonly
 #   then: for ds in circor synth zch bmdhs pascal; do $PY score.py e1 $ds b6pn; $PY score.py e2 $ds b6pn; done; rerun analysis.py
+# post hoc (2026-10-17): seed robustness + hybrids (ANALYSIS_PLAN.md, "Post-hoc analyses")
+$PY prep_test.py synth                # rebuild synthetic set with synthetic_regular (old beats bit-identical)
+./run_seeds_train.sh                  # B4/B5/E6 seeds 43, 44; B4/B5 fold models (folds 1-4) for seeds 42-44
+for s in 43 44; do $PY classic.py b2_rf $s; $PY b3_train.py $s; done
+$PY precache_post.py                  # B1/B2/B3 feature caches for E2s and the synthetic set
+./run_seeds_hybrid.sh                 # scoring (E2s, synth, seeds), hybrid.py pn/test, analysis.py, analysis_fixes.py, seeds.py
+for h in h_and_b4 h_and_b5 h_cas_b4 h_cas_b5 h_fuse_b4 h_fuse_b5; do $PY e5.py $h ${h}_s43 ${h}_s44; done
+$PY fairness_rms.py
 $PY plots.py
+$PY summary_figs.py
+$PY paper_figs.py
+$PY md_tables.py
 $PY verify.py                         # integrity / leakage audit
 $PY leakage.py "final"
 ```

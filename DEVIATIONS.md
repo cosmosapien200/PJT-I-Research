@@ -66,3 +66,18 @@
   beats are rejected, so those cells reject 13.6-19.3 % of calibration beats instead of exactly 10 % (B6a/B6b on ZCHSound, B6pn on
   CirCor and ZCHSound). All other model x dataset cells (ties <= 2.6 %) keep exact-10 % randomised tie-breaking. Column
   `tie_rule` in results/c_thresholds.csv.
+
+## Post-hoc analyses (2026-10-17): seed robustness and hybrid filters (see ANALYSIS_PLAN.md, "Post-hoc analyses")
+- Base branch: the requested base `noise-fix` did not exist (local or origin); with the user's agreement `seeds-hybrid` was branched from master (after committing the B8 work), and the S1+S2-referenced E2 variant and `synthetic_regular` were implemented here.
+- AGENT_PLAN's "one seed per deep model" rule is superseded for B2, B3, B4, B5, E6 (seeds 42, 43, 44) at the user's request; seed 42 = the original models, not retrained.
+- B2/B3 seeds change only the random_state of the forests / gradient boosting / SVM Platt CV; B3's MI feature selection and SVM subsample stay at seed 42, so all three B3 seeds use the same 83 features.
+- B1 (LR deterministic; SVM not reseeded), B6, B7 and the B8 variants are not reseeded; their per-seed rows are copies of seed 42, only their Holm-adjusted p-values change with the other models' seeds.
+- E2s reference power = mean power of the clean window over its reference S1/S2 samples (segments fully inside the window, as used by B7; else the scored beat's own S1/S2), unfiltered like the original whole-window reference. At equal nominal SNR E2s noise is about 3 dB louder than E2 (S1+S2 power is ~3 dB above window power).
+- synthetic_regular: same generator and source recordings as the two synthetic rhythm sets, appended last so their beats are bit-identical (checked); the synthetic set was re-scored by every model (scores of the old beats reproduce).
+- Seed-robust verdict uses the covariate GEE (unadjusted / HR / HR + age) of seeds.py; pooled fit = same formula + C(seed) on the three seeds' stacked rejections, patient clusters (the three seeds' observations of a beat share the patient cluster). For deterministic models the pooled fit is their single fit. The pooled p-values are Holm-corrected across the same family. The independence-correlation sensitivity fit is kept for the canonical seed-42 files only.
+- Hybrids are outside the main Holm family: each hybrid is added to the 11-model main family on its own (as B8v4/B8c), so the main models' verdicts do not depend on how many hybrids were built.
+- H-AND/H-CASCADE default ("published") threshold = 0.9 on their percentile scale (= reject the top 10 % of clean normal calibration beats); used only in published-threshold rows.
+- H-FUSE out-of-fold embeddings: fold-k deep models are trained on the other four folds with early stopping on fold k (the same protocol as the main model, whose early stopping used fold 0); the forest's nested validation uses out-of-fold features of other folds that came from deep models which saw the evaluated fold (standard stacking; second-order only).
+- Hybrid Phase B metrics are 5-fold out-of-fold (B4/B5: fold 0 only), so they are not directly comparable to B4/B5's fold-0 numbers.
+- E5 for hybrids: 3 filter seeds x 3 E5 seeds (9 runs per hybrid); existing filters keep their 3 E5 seeds at filter seed 42 (E5 was not part of the seed-robustness request).
+- Training for the seed replicates ran with two jobs sharing the GPU for the first jobs, then one at a time; GPU non-determinism means a seed-42 retrain would not be bit-identical, which is why seed 42 reuses the original models.

@@ -5,7 +5,9 @@
   RMS log-OR   = same on the heart-rate/age-adjusted GEE log odds ratios (reported as a multiplicative factor exp(RMS))
 95 % CIs: 1,000 patient bootstrap resamples (patients resampled within each class group, independently), recomputing the RMS.
 Exploratory summary added after the pre-specified analysis (see DEVIATIONS.md).
-Outputs: results/fairness_rms.csv, figures/paper/fig21_fairness_rms.(png|pdf)
+Seeds (post hoc): gap RMS computed per seed (seeded models and hybrids use their seed-s scores and thresholds) and averaged;
+the OR summary uses the adjusted odds ratios pooled over seeds (results/gee_covariates_seeds.csv).
+Outputs: results/fairness_rms.csv (mean over seeds), results/fairness_rms_per_seed.csv, figures/paper/fig21_fairness_rms.(png|pdf)
 """
 import os
 import numpy as np, pandas as pd
@@ -14,13 +16,16 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from common import RES, FIG, SEED
 from analysis import all_scores, thresholds, add_rejections, NORMAL
+from seeds import SEEDS, tags
 
 COND = [('circor', 'murmur_systolic'), ('circor', 'murmur_diastolic'), ('zch', 'ASD'), ('zch', 'VSD'), ('zch', 'PFO'), ('zch', 'PDA'),
         ('bmdhs', 'AS'), ('bmdhs', 'AR'), ('bmdhs', 'MR'), ('bmdhs', 'MS'), ('bmdhs', 'multi'), ('pascal', 'murmur'),
         ('pascal', 'extrasystole'), ('circor', 'synthetic_premature'), ('circor', 'synthetic_irregular')]
 MODELS = [('b1_lr', 'B1 Springer SQI'), ('b2_rf', 'B2 Das RF'), ('b3_cardiophon', 'B3 CardioPHON'), ('b4_cnn', 'B4 CNN'),
           ('b5_crnn', 'B5 CRNN'), ('e6_cnn_balanced', 'E6 balanced CNN'), ('b6a', 'B6 PCGKolect'), ('b7', 'B7 SNR rule'),
-          ('b8', 'B8 PCGKolect-v3'), ('b8v4', 'B8v4 PCGKolect-v4'), ('b8c', 'B8c PCGKolect-v3c')]
+          ('b8', 'B8 PCGKolect-v3'), ('b8v4', 'B8v4 PCGKolect-v4'), ('b8c', 'B8c PCGKolect-v3c'),
+          ('h_and_b4', 'H-AND Das∧B4'), ('h_and_b5', 'H-AND Das∧B5'), ('h_cas_b4', 'H-CASCADE Das→B4'), ('h_cas_b5', 'H-CASCADE Das→B5'),
+          ('h_fuse_b4', 'H-FUSE Das+B4'), ('h_fuse_b5', 'H-FUSE Das+B5')]
 LEVELS = ['none', '20', '10', '5', '0']
 NB = 1000
 
@@ -35,8 +40,8 @@ def boot_rates(r, n, rng):
     return r[idx].sum(1) / n[idx].sum(1)
 
 
-def main():
-    e1, e2, models = all_scores()
+def one_seed(s):
+    e1, e2, models = all_scores('e2', tags(s))
     thr = thresholds(e1, models)
     e2 = add_rejections(e2, thr, models)
     rng = np.random.default_rng(SEED)
@@ -63,23 +68,30 @@ def main():
                              debiased_ci_lo=np.percentile(bdeb, 2.5), debiased_ci_hi=np.percentile(bdeb, 97.5), mean_signed_gap_pp=gaps.mean(),
                              max_abs_gap_pp=np.abs(gaps).max()))
     t = pd.DataFrame(rows)
-    # adjusted log odds ratios
-    a = pd.read_csv(os.path.join(RES, 'fix4_gee_e2_covariates.csv'))
-    a = a[((a.dataset.isin(['circor', 'zch'])) & (a.adjustment == 'hr_age')) | ((a.dataset.isin(['bmdhs', 'pascal'])) & (a.adjustment == 'hr'))]
-    orow = []
-    for m, name in MODELS:
-        s = pd.concat([a[(a.model == m) & (a.dataset == ds) & (a.cls == c)] for ds, c in COND])
-        s = s[np.isfinite(s.odds_ratio)]
-        lo, se = np.log(s.odds_ratio.values), (np.log(s.or_ci_hi.values) - np.log(s.or_ci_lo.values)) / (2 * 1.96)
-        r = np.sqrt(np.mean(lo ** 2)); d = np.sqrt(max(0, np.mean(lo ** 2) - np.mean(se ** 2)))
-        orow.append(dict(model=m, n_or=len(lo), rms_log_or=r, rms_or_factor=np.exp(r), debiased_rms_or_factor=np.exp(d)))
-    t = t.merge(pd.DataFrame(orow), on='model', how='left')
     # paired bootstrap: is each model's clean-beat RMS larger than B2's?
     base = draws[('b2_rf', 'clean')]
     t['p_rms_not_gt_b2_clean'] = [np.mean(draws[(m, 'clean')] <= base) if s == 'clean' else np.nan for m, s in zip(t.model, t.scope)]
     b6 = draws[('b6a', 'clean')]; b6all = draws[('b6a', 'all_levels')]
     t['p_rms_not_lt_b6'] = [np.mean(draws[(m, s)] >= (b6 if s == 'clean' else b6all)) for m, s in zip(t.model, t.scope)]
     t['rms_reduction_vs_b6'] = [1 - r / t[(t.model == 'b6a') & (t.scope == s)].debiased_rms_gap_pp.iloc[0] for r, s in zip(t.debiased_rms_gap_pp, t.scope)]
+    return t.assign(seed=s)
+
+
+def main():
+    per = pd.concat([one_seed(s) for s in SEEDS], ignore_index=True)
+    per.to_csv(os.path.join(RES, 'fairness_rms_per_seed.csv'), index=False)
+    t = per.groupby(['model', 'name', 'scope'], sort=False).mean(numeric_only=True).drop(columns='seed').reset_index()
+    # adjusted log odds ratios, pooled over seeds
+    a = pd.read_csv(os.path.join(RES, 'gee_covariates_seeds.csv'))
+    a = a[(a.variant == 'E2') & (((a.dataset.isin(['circor', 'zch'])) & (a.adjustment == 'hr_age')) | ((a.dataset.isin(['bmdhs', 'pascal'])) & (a.adjustment == 'hr')))]
+    orow = []
+    for m, name in MODELS:
+        s = pd.concat([a[(a.model == m) & (a.dataset == ds) & (a.cls == c)] for ds, c in COND])
+        s = s[np.isfinite(s.pooled_odds_ratio)]
+        lo, se = np.log(s.pooled_odds_ratio.values), (np.log(s.pooled_or_ci_hi.values) - np.log(s.pooled_or_ci_lo.values)) / (2 * 1.96)
+        r = np.sqrt(np.mean(lo ** 2)); d = np.sqrt(max(0, np.mean(lo ** 2) - np.mean(se ** 2)))
+        orow.append(dict(model=m, n_or=len(lo), rms_log_or=r, rms_or_factor=np.exp(r), debiased_rms_or_factor=np.exp(d)))
+    t = t.merge(pd.DataFrame(orow), on='model', how='left')
     t.to_csv(os.path.join(RES, 'fairness_rms.csv'), index=False)
     pd.set_option('display.width', 230)
     print(t[t.scope == 'clean'][['name', 'rms_gap_pp', 'debiased_rms_gap_pp', 'debiased_ci_lo', 'debiased_ci_hi', 'mean_signed_gap_pp', 'rms_or_factor',
@@ -91,7 +103,8 @@ def main():
 def plot(t):
     INK, INK2, GRID, SURF = '#1f1f1d', '#5c5b57', '#e4e3df', '#fcfcfb'
     prop = {'b8', 'b8v4', 'b8c'}
-    fig, axes = plt.subplots(1, 3, figsize=(15, 4.8), sharey=True, facecolor=SURF)
+    hyb = {m for m, _ in MODELS if m.startswith('h_')}
+    fig, axes = plt.subplots(1, 3, figsize=(15, 6.6), sharey=True, facecolor=SURF)
     c = t[t.scope == 'clean'].sort_values('debiased_rms_gap_pp', ascending=False).reset_index(drop=True)
     order = list(c.model)
     y = np.arange(len(order))
@@ -100,7 +113,7 @@ def plot(t):
             ('all_levels', 'debiased_rms_gap_pp', 'debiased_ci_lo', 'debiased_ci_hi', '(b) RMS gap, all noise levels', 'noise-corrected RMS gap, 15 conditions × 5 levels (pp)'),
             ('clean', 'rms_or_factor', None, None, '(c) RMS of adjusted odds ratios', 'typical OR distance from 1 (×, HR/age-adjusted)'))):
         d = t[t.scope == scope].set_index('model').loc[order]
-        cols = ['#e34948' if m in prop else '#2a78d6' for m in order]
+        cols = ['#e34948' if m in prop else ('#4a3aa7' if m in hyb else '#2a78d6') for m in order]
         col_ = col
         if lo:
             ax.hlines(y, d[lo], d[hi], color=cols, lw=2, alpha=0.6)
@@ -115,10 +128,10 @@ def plot(t):
             ax.spines[s].set_visible(False)
         ax.set_facecolor(SURF)
     axes[0].set_yticks(y, c.name); axes[0].legend(fontsize=8, loc='upper right', frameon=False)
-    fig.suptitle('Aggregate fairness: RMS of the pathological-minus-normal rejection gap over all 15 disease / rhythm conditions (lower = fairer)',
+    fig.suptitle('Aggregate bias: RMS of the pathological-minus-normal rejection gap over all 15 disease / rhythm conditions (lower = less biased)',
                  x=0.01, ha='left', fontweight='bold', fontsize=11.5)
     fig.text(0.01, 0.01, 'Dots: noise-corrected RMS (sampling variance of small groups removed) with 95 % patient-bootstrap CI; bars "|": raw RMS. '
-             'Blue = existing filters, red = PCGKolect-v3 variants. Matched thresholds; E2 equal-noise protocol. Exploratory summary.',
+             'Blue = existing filters, red = PCGKolect-v3 variants, purple = hybrids. Matched thresholds; E2 equal-noise protocol; mean of 3 seeds for seeded models. Exploratory summary.',
              fontsize=7.5, color=INK2)
     fig.tight_layout(rect=(0, 0.04, 1, 0.94))
     for ext in ('png', 'pdf'):

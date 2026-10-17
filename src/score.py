@@ -2,20 +2,25 @@
 
   python score.py e1 <ds> [models...]     ds in circor bmdhs pascal zch synth
   python score.py e2 <ds> [models...]
+  python score.py e2s <ds> [models...]    E2 with the noise scaled against the clean window's S1+S2 power (post hoc)
   python score.py pn                      B6/B7 window scores on the PhysioNet corpus
 
 Scores are cached per model in data/processed/scores/<exp>_<ds>_<model>.npy, aligned with the index file
 data/processed/scores/<exp>_<ds>_index.csv. E2 index: clean evaluation beats x SNR levels (20, 10, 5, 0 dB);
 the no-noise level is taken from E1. Noisy windows are regenerated deterministically on demand.
+E2s: same beats, clips, offsets and levels as E2; only the reference power changes (S1+S2 samples instead of the whole window).
+Seeded models (post hoc) use tags <model>_s<seed>; B4/B5 tags also save the penultimate embedding (<exp>_<ds>_<tag>_emb.npy).
 """
 import os, sys, time
 import numpy as np, pandas as pd, joblib
-from common import PROC, MODELS, WIN, stable_seed, add_noise
+from common import PROC, MODELS, WIN, stable_seed, add_noise, add_noise_ref
 from noise_banks import load_bank, noise_segment
 
 SC = os.path.join(PROC, 'scores'); os.makedirs(SC, exist_ok=True)
 ALL = ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6', 'b7']
 SNRS = [20, 10, 5, 0]
+DEEP = ('b4_cnn', 'b5_crnn', 'e6_cnn_balanced')
+EMBED = ('b4_cnn', 'b5_crnn')
 
 
 def beats_table(ds):
@@ -41,6 +46,24 @@ def e2_noise(beat_ids):
     return N, clips
 
 
+def s1s2_power(clean, bs, seg):
+    """Mean power of each clean window over its S1 and S2 samples: every reference S1/S2 segment fully inside the window
+    (as used by B7), else the scored beat's own S1 and S2."""
+    by_rec = {r: g[['start', 'end', 'state']].values for r, g in seg[seg.state.isin(['S1', 'S2'])].groupby('record_id')}
+    out = np.empty(len(bs))
+    for i, r in enumerate(bs.itertuples()):
+        ws = int(r.centre) - WIN // 2
+        sg = by_rec.get(r.record_id, np.empty((0, 3)))
+        iv = [(s - ws, e - ws) for s, e, _ in sg if s >= ws and e <= ws + WIN]
+        if not iv:
+            iv = [(max(r.start - ws, 0), min(r.s1_end - ws, WIN)), (max(r.s2_start - ws, 0), min(r.s2_end - ws, WIN))]
+        m = np.zeros(WIN, bool)
+        for a, b in iv:
+            m[int(a):int(b)] = True
+        out[i] = np.mean(clean[i][m].astype(np.float64) ** 2)
+    return out
+
+
 def window_sets(exp, ds):
     """Yields (name, row_index_array, windows float32) chunks + writes the index file."""
     b = beats_table(ds)
@@ -58,10 +81,12 @@ def window_sets(exp, ds):
     for s in SNRS:
         r = bs[['beat_id', 'record_id', 'patient_id', 'dataset', 'cls', 'split', 'clean']].copy()
         r['snr_level'] = s; r['noise_clip'] = clips; rows.append(r)
-    pd.concat(rows, ignore_index=True).to_csv(os.path.join(SC, f'e2_{ds}_index.csv'), index=False)
+    pd.concat(rows, ignore_index=True).to_csv(os.path.join(SC, f'{exp}_{ds}_index.csv'), index=False)
     clean = np.asarray(W[sel], np.float32)
+    pref = s1s2_power(clean, bs, segments(ds)) if exp == 'e2s' else None
     for k, s in enumerate(SNRS):
-        X = np.stack([add_noise(clean[i], N[i], s) for i in range(len(sel))])
+        X = np.stack([add_noise(clean[i], N[i], s) if pref is None else add_noise_ref(clean[i], N[i], s, pref[i])
+                      for i in range(len(sel))])
         X /= np.abs(X).max(1, keepdims=True) + 1e-9
         yield s, np.arange(k * len(sel), (k + 1) * len(sel)), X, bs
 
@@ -69,6 +94,7 @@ def window_sets(exp, ds):
 def run(exp, ds, models):
     t0 = time.time()
     outs = {m: [] for m in models}
+    embs = {m: [] for m in models if m.startswith(EMBED)}
     seg = segments(ds) if 'b7' in models else None
     for level, rows, X, b in window_sets(exp, ds):
         need_f = [m for m in models if m.startswith(('b1', 'b2'))]
@@ -82,7 +108,8 @@ def run(exp, ds, models):
             for m in need_f:
                 clf = joblib.load(os.path.join(MODELS, f'{m}.joblib'))
                 outs[m].append(clf.predict_proba(b1 if m.startswith('b1') else b2)[:, 1])
-        if 'b3_cardiophon' in models:
+        b3m = [m for m in models if m.startswith('b3_cardiophon')]
+        if b3m:
             fp = os.path.join(SC, f'{exp}_{ds}_{level}_b3feats.npz')
             if os.path.exists(fp):
                 F3 = np.load(fp)['X']
@@ -90,9 +117,14 @@ def run(exp, ds, models):
                 import cardiophon_features as C3
                 F3 = C3.compute(X); np.savez(fp, X=F3)
             F3 = F3.astype(np.float64); F3[~np.isfinite(F3)] = np.nan
-            outs['b3_cardiophon'].append(joblib.load(os.path.join(MODELS, 'b3_cardiophon.joblib')).predict_proba(F3)[:, 1])
+            for m in b3m:
+                outs[m].append(joblib.load(os.path.join(MODELS, f'{m}.joblib')).predict_proba(F3)[:, 1])
         for m in models:
-            if m in ('b4_cnn', 'b5_crnn', 'e6_cnn_balanced'):
+            if m.startswith(EMBED):
+                import deep
+                p, e = deep.score(m, X, embed=True)
+                outs[m].append(p); embs[m].append(e.astype(np.float32))
+            elif m.startswith(DEEP):
                 import deep
                 outs[m].append(deep.score(m, X))
             elif m.startswith('b8'):
@@ -115,7 +147,16 @@ def run(exp, ds, models):
             for j, c in enumerate(cols):
                 np.save(os.path.join(SC, f'{exp}_{ds}_{c}.npy'), v[:, j])
         else:
-            np.save(os.path.join(SC, f'{exp}_{ds}_{m}.npy'), v)
+            f = os.path.join(SC, f'{exp}_{ds}_{m}.npy')
+            if m in embs and os.path.exists(f) and len(np.load(f)) == len(v):
+                # re-run only to obtain embeddings: keep the published scores (GPU re-inference differs by float noise only)
+                d = np.abs(np.load(f) - v).max()
+                assert d < 1e-4, f'{f}: re-scored values differ by {d}'
+                print(m, 'kept existing scores; max re-inference difference', f'{d:.1e}')
+            else:
+                np.save(f, v)
+        if m in embs:
+            np.save(os.path.join(SC, f'{exp}_{ds}_{m}_emb.npy'), np.concatenate(embs[m]))
 
 
 def run_pn():

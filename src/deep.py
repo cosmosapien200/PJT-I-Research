@@ -1,6 +1,10 @@
 """Deep quality models (study baselines) on the PhysioNet common corpus.
 
-  python deep.py b4_cnn | b5_crnn | e6_cnn_balanced
+  python deep.py b4_cnn | b5_crnn | e6_cnn_balanced [seed] [fold]
+
+seed (default 42) -> model tag <name> for 42, <name>_s<seed> otherwise (seed-robustness analysis, post hoc).
+fold k (optional, 1-4): train on folds != k with early stopping on fold k, tag <tag>_f<k>; writes out-of-fold scores and
+penultimate-layer embeddings for fold k (used by the H-FUSE hybrids). Fold 0 is the main model itself.
 
 Input: 5 s @ 2 kHz, 20 Hz high-pass, per-window z-score -> log-mel (64 bands 20-1000 Hz, 25 ms window,
 10 ms hop), computed on the GPU from the cached audio. One train/validation split: fold 0 (20 %, by
@@ -39,8 +43,11 @@ class CNN(nn.Module):
         self.body = nn.Sequential(block(1, 32, 2), block(32, 64, 2), block(64, 128, 2), block(128, 128, 2))
         self.head = nn.Sequential(nn.Dropout(0.3), nn.Linear(128, 1))
 
+    def embed(self, x):                                       # penultimate layer (global average pool), 128-d
+        return self.body(self.fe(x)).mean((2, 3))
+
     def forward(self, x):
-        return self.head(self.body(self.fe(x)).mean((2, 3))).squeeze(1)
+        return self.head(self.embed(x)).squeeze(1)
 
 
 class CRNN(nn.Module):
@@ -51,10 +58,13 @@ class CRNN(nn.Module):
         self.rnn = nn.LSTM(128 * 4, 64, num_layers=2, batch_first=True, bidirectional=True)
         self.head = nn.Linear(128, 1)
 
-    def forward(self, x):
+    def embed(self, x):                                       # penultimate layer (mean BiLSTM output), 128-d
         h = self.body(self.fe(x))                             # [B, 128, 4, T]
         h = h.flatten(1, 2).transpose(1, 2)                   # [B, T, 512]
-        return self.head(self.rnn(h)[0].mean(1)).squeeze(1)
+        return self.rnn(h)[0].mean(1)
+
+    def forward(self, x):
+        return self.head(self.embed(x)).squeeze(1)
 
 
 ARCH = {'b4_cnn': CNN, 'b5_crnn': CRNN, 'e6_cnn_balanced': CNN}
@@ -66,14 +76,19 @@ def prep_audio(W):
 
 
 @torch.no_grad()
-def predict_logits(model, X, bs=256):
+def predict_logits(model, X, bs=256, embed=False):
     model.eval()
-    out = []
+    out, emb = [], []
     for i in range(0, len(X), bs):
         xb = X[i:i + bs]
         xb = xb if torch.is_tensor(xb) else torch.from_numpy(np.asarray(xb, np.float32))
-        out.append(model(xb.to(DEV, torch.float32)).float().cpu())
-    return torch.cat(out).numpy()
+        xb = xb.to(DEV, torch.float32)
+        if embed:
+            e = model.embed(xb); emb.append(e.float().cpu())
+            out.append(model.head(e).squeeze(1).float().cpu())
+        else:
+            out.append(model(xb).float().cpu())
+    return (torch.cat(out).numpy(), torch.cat(emb).numpy()) if embed else torch.cat(out).numpy()
 
 
 def train_model(name, X, y, tr, va, arch, sample_w=None, log_path=None, max_epochs=50, patience=5, seed=SEED):
@@ -128,25 +143,39 @@ def train_model(name, X, y, tr, va, arch, sample_w=None, log_path=None, max_epoc
     return model
 
 
+def arch_of(tag):
+    """b4_cnn_s43 / b5_crnn_s44_f2 / e6_cnn_balanced -> base architecture name."""
+    return next(a for a in ARCH if tag == a or tag.startswith(a + '_'))
+
+
 def load_model(name):
-    m = ARCH[name]().to(DEV)
+    m = ARCH[arch_of(name)]().to(DEV)
     m.load_state_dict(torch.load(os.path.join(MODELS, f'{name}.pt'), map_location=DEV))
     m.eval()
     return m
 
 
-def score(name, W):
-    """Unusable probability for raw float16 windows."""
+def score(name, W, embed=False):
+    """Unusable probability for raw float16 windows (and the penultimate embedding if embed)."""
     m = load_model(name)
-    return 1 / (1 + np.exp(-predict_logits(m, prep_audio(W)).astype(np.float64)))   # float64: no saturation at 1.0
+    r = predict_logits(m, prep_audio(W), embed=embed)
+    lg, e = r if embed else (r, None)
+    p = 1 / (1 + np.exp(-lg.astype(np.float64)))   # float64: no saturation at 1.0
+    return (p, e) if embed else p
 
 
-def main(name):
+def tag_of(name, seed=SEED, fold=None):
+    return name + ('' if seed == SEED else f'_s{seed}') + ('' if fold is None else f'_f{fold}')
+
+
+def main(name, seed=SEED, fold=None):
     t0 = time.time()
+    tag = tag_of(name, seed, fold)
     meta = pd.read_csv(os.path.join(PROC, 'pn_windows.csv'))
     X = prep_audio(np.load(os.path.join(PROC, 'pn_windows_audio.npy'), mmap_mode='r'))
     y = meta.unusable.values
-    va = np.flatnonzero(meta.fold.values == 0); tr = np.flatnonzero(meta.fold.values != 0)
+    k = 0 if fold is None else fold
+    va = np.flatnonzero(meta.fold.values == k); tr = np.flatnonzero(meta.fold.values != k)
     sw = None
     if name == 'e6_cnn_balanced':
         # usable windows: normal and abnormal recordings get equal total sampling weight (50/50)
@@ -157,13 +186,15 @@ def main(name):
         n_u = n_un + n_ua
         sw[u & (meta.abnormal.values == 0)] = 0.5 * n_u / n_un
         sw[u & (meta.abnormal.values == 1)] = 0.5 * n_u / n_ua
-    model = train_model(name, X, y, tr, va, ARCH[name], sample_w=sw, log_path=os.path.join(LOGT, f'{name}.csv'))
-    torch.save(model.state_dict(), os.path.join(MODELS, f'{name}.pt'))
-    pv = 1 / (1 + np.exp(-predict_logits(model, X[va])))
-    pd.DataFrame(dict(window_id=meta.window_id.values[va], fold=0, y=y[va], score=pv)).to_csv(
-        os.path.join(PROC, f'val_preds_{name}.csv'), index=False)
-    print(name, 'val AUROC', round(roc_auc_score(y[va], pv), 4), 'time', round(time.time() - t0), 's')
+    model = train_model(tag, X, y, tr, va, ARCH[name], sample_w=sw, log_path=os.path.join(LOGT, f'{tag}.csv'), seed=seed)
+    torch.save(model.state_dict(), os.path.join(MODELS, f'{tag}.pt'))
+    lv, ev = predict_logits(model, X[va], embed=True)
+    pv = 1 / (1 + np.exp(-lv.astype(np.float64)))
+    pd.DataFrame(dict(window_id=meta.window_id.values[va], fold=k, y=y[va], score=pv)).to_csv(
+        os.path.join(PROC, f'val_preds_{tag}.csv'), index=False)
+    np.save(os.path.join(PROC, f'oof_embed_{tag}.npy'), ev.astype(np.float32))      # rows = windows of fold k, in order
+    print(tag, 'val AUROC', round(roc_auc_score(y[va], pv), 4), 'time', round(time.time() - t0), 's')
 
 
 if __name__ == '__main__':
-    main(sys.argv[1])
+    main(sys.argv[1], int(sys.argv[2]) if len(sys.argv) > 2 else SEED, int(sys.argv[3]) if len(sys.argv) > 3 else None)

@@ -1,4 +1,4 @@
-# Progress   (last updated: 2026-10-16 11:50)
+# Progress   (last updated: 2026-10-17 15:46)
 ## Datasets
 - [x] PhysioNet 2016: 3,153 records, 19.7 h, 2 kHz, 2,769 patient groups, 428 noise stretches
 - [x] CirCor 1.0.3: 3,163 recordings, 942 patients, 24,049 beats (<=8/recording), clean cut-off 10.1 dB
@@ -39,6 +39,6 @@
 - ZCHSound official site unreachable; used user-supplied GitHub mirror (clean subset)
 - B3 CardioPHON skipped: no feature-extraction code in repo
 - BMD-HS repo moved: used github.com/sani002/BMD-HS-Dataset
-- leakage check passed (after B8)
+- leakage check passed (before seed/hybrid scoring)
 - Segmenter HR cap (120 bpm) mis-segmented ZCHSound infants: fixed (paediatric range), ZCHSound rerun
 - integrity audit (src/verify.py): all 25 checks passed (after option A)

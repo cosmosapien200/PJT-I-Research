@@ -92,6 +92,12 @@ def add_noise(clean, noise, snr_db):
     return (clean + noise * np.sqrt(pc / (pn * 10 ** (snr_db / 10)))).astype(np.float32)
 
 
+def add_noise_ref(clean, noise, snr_db, p_ref):
+    """As add_noise, but against a given reference power (E2s: the clean window's S1+S2 power): p_ref / P_noise = snr_db."""
+    pn = np.mean(noise.astype(np.float64) ** 2) + 1e-20
+    return (clean + noise * np.sqrt(p_ref / (pn * 10 ** (snr_db / 10)))).astype(np.float32)
+
+
 def write_progress_line(section, key, line):
     """Overwrite (or add) one line in PROGRESS.md under `## section`, keyed by `key` substring."""
     import time, re
