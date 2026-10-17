@@ -88,9 +88,28 @@ def _pooled(args):
                 continue
             for name, spec in F.cov_designs(sub, has_age, extra=' + C(seed)').items():
                 form, keep = (spec if isinstance(spec, tuple) else (spec, None))
-                r = F.fit(sub[keep] if keep is not None else sub, form)
-                rows.append(dict(variant=variant, dataset=ds, model=m, cls=c, adjustment=name) | {f'pooled_{k}': v for k, v in r.items()})
+                s2 = sub[keep] if keep is not None else sub
+                # primary: independence working correlation (patient-clustered robust SE). With three near-identical copies of
+                # every beat an exchangeable working correlation re-weights towards patients and changes the estimand
+                # (pooled OR outside the per-seed range); it is kept as a sensitivity column (pooled_exch_*).
+                r = indep_fit(s2, form)
+                e = F.fit(s2, form)
+                rows.append(dict(variant=variant, dataset=ds, model=m, cls=c, adjustment=name) | {f'pooled_{k}': v for k, v in r.items()}
+                            | {'pooled_exch_odds_ratio': e['odds_ratio'], 'pooled_exch_p': e['p']})
     return rows
+
+
+def indep_fit(sub, form):
+    import statsmodels.api as sm, statsmodels.formula.api as smf
+    try:
+        f = smf.gee(form, 'patient_id', sub, family=sm.families.Binomial(), cov_struct=sm.cov_struct.Independence()).fit(maxiter=100)
+        b, se = f.params['path'], f.bse['path']
+        if np.isfinite(b) and np.isfinite(se) and 1e-6 < se and abs(b) < 15:
+            return dict(odds_ratio=np.exp(b), or_ci_lo=np.exp(b - 1.96 * se), or_ci_hi=np.exp(b + 1.96 * se), p=f.pvalues['path'],
+                        cov_struct='independence')
+    except Exception:
+        pass
+    return dict(odds_ratio=np.nan, or_ci_lo=np.nan, or_ci_hi=np.nan, p=np.nan, cov_struct='not converged')
 
 
 # ---------------------------------------------------------------- aggregation
@@ -120,18 +139,34 @@ def agg(df):
     return out[cols + ['n_seeds']].reset_index()
 
 
-def main():
+def rejections_seed(s, cov):
+    e1, e2, models = A.all_scores('e2', tags(s))
+    _, e2s, ms = A.all_scores('e2s', tags(s))
+    models = [m for m in models if m in ms]
+    thr = A.thresholds(e1, models)
+    keep = ['beat_id', 'patient_id', 'dataset', 'cls', 'snr_level', 'hr_bpm', 'age_cat']
+    return models, {v: A.add_rejections(x, thr, models).merge(cov, on='beat_id', how='left')[keep + [f'{m}__matched' for m in models if m in VARIES]]
+                    for v, x in (('E2', e2), ('E2s', e2s))}
+
+
+def main(pooled_only=False):
     cov = F.covariates()
     parts, rej, models = {}, {'E2': {}, 'E2s': {}}, None
     for s in SEEDS:
-        parts[s], ms, r = replicate_seed(s, cov)
+        if pooled_only:
+            ms, r = rejections_seed(s, cov)
+        else:
+            parts[s], ms, r = replicate_seed(s, cov)
         models = ms if models is None else models
         for v in r:
             rej[v][s] = r[v]
-        print('seed', s, 'replicate done', flush=True)
+        print('seed', s, 'rejections done' if pooled_only else 'replicate done', flush=True)
     for v in rej:   # identical row order across seeds (same index files)
         assert all((rej[v][s].beat_id.values == rej[v][SEED].beat_id.values).all() for s in SEEDS)
     vary = [m for m in models if m in VARIES]
+    if pooled_only:
+        verdicts(pd.read_csv(os.path.join(RES, 'gee_covariates_per_seed.csv')), rej, vary)
+        return
 
     # ---- simple tables: per seed (long) + mean/SD
     names = {'perf': 'b_quality_performance', 'thresholds': 'c_thresholds', 'e1': 'e1_raw', 'e2': 'e2_equal_noise', 'e2s': 'e2s_equal_noise',
@@ -160,13 +195,16 @@ def main():
         cg.append(pd.concat([A.holm(g.reset_index(drop=True), ['dataset', 'cls', 'adjustment']) for _, g in df.groupby('seed')], ignore_index=True))
     cg = pd.concat(cg, ignore_index=True)
     cg.to_csv(os.path.join(RES, 'gee_covariates_per_seed.csv'), index=False)
+    verdicts(cg, rej, vary)
 
+
+def verdicts(cg, rej, vary):
     G.update({f'rej_{v}': rej[v] for v in rej})
     with ProcessPoolExecutor(NPROC) as ex:
         pooled = pd.DataFrame([r for rows in ex.map(_pooled, [(m, v) for m in vary for v in rej]) for r in rows])
     keys = ['variant', 'dataset', 'model', 'cls', 'adjustment']
     fixed = cg[(cg.seed == SEED) & ~cg.model.isin(vary)]
-    fixed = fixed[keys + ['odds_ratio', 'or_ci_lo', 'or_ci_hi', 'p', 'cov_struct']].rename(
+    fixed = fixed[keys + ['odds_ratio', 'or_ci_lo', 'or_ci_hi', 'p', 'cov_struct']].assign(pooled_exch_odds_ratio=fixed.odds_ratio, pooled_exch_p=fixed.p).rename(
         columns={c: f'pooled_{c}' for c in ('odds_ratio', 'or_ci_lo', 'or_ci_hi', 'p', 'cov_struct')})
     pooled = pd.concat([pooled, fixed], ignore_index=True)
     pooled = A.holm(pooled.reset_index(drop=True), ['variant', 'dataset', 'cls', 'adjustment'], p='pooled_p', out='pooled_p_holm')
@@ -190,4 +228,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    import sys
+    main(pooled_only='pooled' in sys.argv)

@@ -16,7 +16,7 @@ import numpy as np, pandas as pd, torch
 from sklearn.metrics import roc_auc_score, roc_curve
 from common import PROC, MAN, RES, LOGT, SEED
 import deep
-from analysis import load, MODELS, add_rejections, EXCLUDE
+from analysis import load, MODELS, add_rejections, EXCLUDE, PUBLISHED
 
 THR = os.path.join(RES, 'c_thresholds.csv')
 SEEDS = [SEED, SEED + 1, SEED + 2]
@@ -52,6 +52,7 @@ def main():
         for v in seeded:
             m, sd = split_tag(v)
             t = ps[(ps.seed == sd) & (ps.model == m)].assign(model=v)
+            PUBLISHED[v] = PUBLISHED[m]
             b = add_rejections(b, t, [v])
         models = models + seeded
     W = np.load(os.path.join(PROC, 'circor_beat_windows.npy'), mmap_mode='r')
