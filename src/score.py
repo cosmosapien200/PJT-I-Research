@@ -95,6 +95,9 @@ def run(exp, ds, models):
             if m in ('b4_cnn', 'b5_crnn', 'e6_cnn_balanced'):
                 import deep
                 outs[m].append(deep.score(m, X))
+            elif m.startswith('b8'):
+                import b6
+                outs[m].append(b6.score_noise(X, b.rel_start.values, b.rel_end.values, os.path.join(MODELS, f'{m}.pt')))
             elif m in ('b6', 'b6pn'):
                 import b6
                 outs[m].append(b6.score_beats(X, b.rel_start.values, b.rel_end.values,

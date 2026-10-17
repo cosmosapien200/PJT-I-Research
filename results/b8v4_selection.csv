@@ -1,0 +1,3 @@
+model,fold0_auroc,rhythm_shift_auroc,n_crops,dev_dist,selected
+b8v4a,0.8086,0.2403,288,0.2597,True
+b8v4b,0.7918,0.198,288,0.302,False

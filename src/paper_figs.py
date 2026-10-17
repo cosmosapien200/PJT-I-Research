@@ -29,10 +29,10 @@ plt.rcParams.update({'font.family': 'DejaVu Sans', 'font.size': 9.5, 'text.color
                      'lines.linewidth': 2, 'savefig.facecolor': SURF})
 
 MAIN = [('b1_lr', 'B1 Springer SQI'), ('b2_rf', 'B2 Das RF'), ('b3_cardiophon', 'B3 CardioPHON'), ('b4_cnn', 'B4 CNN'),
-        ('b5_crnn', 'B5 CRNN'), ('b6a', 'B6 PCGKolect'), ('b7', 'B7 SNR rule')]
+        ('b5_crnn', 'B5 CRNN'), ('b6a', 'B6 PCGKolect'), ('b7', 'B7 SNR rule'), ('b8', 'B8 PCGKolect-v3')]
 MCOL = {m: CAT[i] for i, (m, _) in enumerate(MAIN)}
 MNAME = dict(MAIN) | {'b1_svm': 'B1 SVM', 'e6_cnn_balanced': 'E6 balanced CNN', 'b6b': 'B6b (+rhythm check)',
-                      'b6pna': 'B6 PhysioNet-only', 'b6pnb': 'B6b PhysioNet-only'}
+                      'b6pna': 'B6 PhysioNet-only', 'b6pnb': 'B6b PhysioNet-only', 'b8noaug': 'B8 without rhythm aug.', 'b8v4': 'B8v4 PCGKolect-v4', 'b8c': 'B8c PCGKolect-v3c'}
 COLS = [('circor', 'murmur_systolic', 'Systolic murmur'), ('circor', 'murmur_diastolic', 'Diastolic murmur*'),
         ('zch', 'ASD', 'ASD'), ('zch', 'VSD', 'VSD'), ('zch', 'PFO', 'PFO'), ('zch', 'PDA', 'PDA'),
         ('bmdhs', 'AS', 'AS'), ('bmdhs', 'AR', 'AR'), ('bmdhs', 'MR', 'MR'), ('bmdhs', 'MS', 'MS'), ('bmdhs', 'multi', 'Multi-valve'),
@@ -190,7 +190,7 @@ def f03_e0():
 # ------------------------------------------------------------------ F4 model performance
 def f04_models():
     b = rd('b_quality_performance.csv')
-    order = ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b', 'b7']
+    order = ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b', 'b7', 'b8', 'b8noaug']
     b = b.set_index('model').loc[order]
     fig, axes = plt.subplots(1, 2, figsize=(13, 4.6), gridspec_kw=dict(width_ratios=[1.25, 1]))
     ax = axes[0]; x = np.arange(len(order)); w = 0.38

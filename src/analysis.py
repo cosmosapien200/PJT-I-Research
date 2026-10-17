@@ -11,9 +11,9 @@ from common import PROC, RES, MAN, SEED, stable_seed
 
 warnings.filterwarnings('ignore')
 SC = os.path.join(PROC, 'scores')
-MODELS = ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b', 'b7', 'b6pna', 'b6pnb']
+MODELS = ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b', 'b7', 'b8', 'b8v4', 'b8c', 'b6pna', 'b6pnb', 'b8noaug']
 PUBLISHED = {m: 0.5 for m in MODELS} | {'b6a': 0.20, 'b6b': 0.20, 'b7': -14.0, 'b6pna': 0.20, 'b6pnb': 0.20}
-SENSITIVITY = {'b6pna', 'b6pnb'}   # fix 6 (B6 retrained on PhysioNet only): reported, not in the Holm family
+SENSITIVITY = {'b6pna', 'b6pnb', 'b8noaug', 'b8v4', 'b8c'}   # b8v4: disclosed post-hoc iteration, own Holm family (see analysis_fixes)   # b8noaug = pre-registered ablation of B8   # fix 6 (B6 retrained on PhysioNet only): reported, not in the Holm family
 DATASETS = ['circor', 'zch', 'bmdhs', 'pascal']
 NORMAL = {'normal', 'control'}
 NOT_PATH = NORMAL | {'unknown', 'murmur_patient_other_location', 'no_murmur_abnormal_outcome'}
@@ -149,7 +149,7 @@ def table(df, models, by, level_col=None):
 
 def b_performance():
     rows = []
-    for m in ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b', 'b7']:
+    for m in ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b', 'b7', 'b8', 'b8v4', 'b8c', 'b8noaug']:
         p = os.path.join(PROC, f'val_preds_{m}.csv')
         if not os.path.exists(p):
             continue
@@ -161,7 +161,7 @@ def b_performance():
         ev = {'b1_lr': '5-fold out-of-fold', 'b1_svm': '5-fold out-of-fold', 'b2_rf': '5-fold out-of-fold', 'b3_cardiophon': '5-fold out-of-fold',
               'b6a': 'all windows (not trained on quality labels; seen in training)',
               'b6b': 'all windows (not trained on quality labels; seen in training)',
-              'b7': 'all windows (annotation-based, not trained)'}.get(m, 'validation fold 0')
+              'b7': 'all windows (annotation-based, not trained)', 'b8': 'validation fold 0', 'b8noaug': 'validation fold 0', 'b8v4': 'validation fold 0', 'b8c': 'validation fold 0'}.get(m, 'validation fold 0')
         rows.append(dict(model=m, eval_set=ev, n_windows=len(y), auroc=roc_auc_score(y, s),
                          balanced_acc=balanced_accuracy_score(y, pr), sensitivity=pr[y == 1].mean(),
                          specificity=1 - pr[y == 0].mean(), eer=(fpr[i] + 1 - tpr[i]) / 2, threshold=PUBLISHED[m]))
@@ -226,6 +226,17 @@ def gee(e2, models):
         if ok.any():
             ii = g.loc[idx][ok].index
             g.loc[ii, 'p_holm'] = multipletests(g.loc[ii, 'p'], method='holm')[1]
+    # B8v4 (disclosed second iteration): Holm in the family where it replaces B8 (other 10 models + B8v4)
+    for alt in ('b8v4', 'b8c'):
+        fam = g[(~g.model.isin(SENSITIVITY - {alt})) & (g.model != 'b8')]
+        for _, idx in fam.groupby(['dataset', 'cls']).groups.items():
+            ii = [i for i in idx if np.isfinite(g.loc[i, 'p'])]
+            jj = [i for i in ii if g.loc[i, 'model'] == alt]
+            if jj:
+                adj = multipletests(g.loc[ii, 'p'], method='holm')[1]
+                for i, v in zip(ii, adj):
+                    if i in jj:
+                        g.loc[i, 'p_holm'] = v
     g.to_csv(os.path.join(RES, 'f_gee_e2.csv'), index=False)
     return g
 

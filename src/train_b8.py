@@ -124,9 +124,18 @@ def main(name):
     log = open(os.path.join(LOGT, f'{name}.csv'), 'w', newline=''); wr = csv.writer(log)
     wr.writerow(['step', 'train_loss', 'val_auroc', 'lr']); log.flush()
     run, t0 = 0.0, time.time()
+
+    class Batches(torch.utils.data.IterableDataset):          # parallel batch building (seeded per worker)
+        def __iter__(self):
+            wi = torch.utils.data.get_worker_info()
+            r = np.random.default_rng([SEED, wi.id if wi else 0])
+            while True:
+                yield make_batch(r, d, recs, w, aug)
+    loader = iter(torch.utils.data.DataLoader(Batches(), batch_size=None, num_workers=7, prefetch_factor=4,
+                                              persistent_workers=True))
     for st in range(STEPS):
         net.train()
-        X, Y = make_batch(rng, d, recs, w, aug)
+        X, Y = next(loader)
         with torch.no_grad():
             f = TS.spec_augment(fe(X.to(DEV)), rng)
         loss = Fn.cross_entropy(net(f)[:, :, 0, :], Y.to(DEV), ignore_index=IGNORE, label_smoothing=0.05)

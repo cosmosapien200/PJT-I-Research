@@ -19,7 +19,7 @@ INK, INK2, GRID, SURF = '#1f1f1d', '#5c5b57', '#d9d8d4', '#fcfcfb'
 CMAP = LinearSegmentedColormap.from_list('div', [BLUE, MID, RED])
 
 MODELS = [('b1_lr', 'B1  Springer SQI (LR)'), ('b2_rf', 'B2  Das RF'), ('b3_cardiophon', 'B3  CardioPHON'),
-          ('b4_cnn', 'B4  CNN'), ('b5_crnn', 'B5  CRNN'), ('b6a', 'B6  PCGKolect U-Net+HMM'), ('b7', 'B7  SNR rule')]
+          ('b4_cnn', 'B4  CNN'), ('b5_crnn', 'B5  CRNN'), ('b6a', 'B6  PCGKolect U-Net+HMM'), ('b7', 'B7  SNR rule'), ('b8', 'B8  PCGKolect-v3 (proposed)'), ('b8v4', 'B8v4  PCGKolect-v4'), ('b8c', 'B8c  PCGKolect-v3c (proposed)')]
 COLS = [  # (dataset, class, label, group)
     ('circor', 'murmur_systolic', 'Systolic\nmurmur', 'CirCor (children, murmurs)'),
     ('circor', 'murmur_diastolic', 'Diastolic\nmurmur*', 'CirCor (children, murmurs)'),

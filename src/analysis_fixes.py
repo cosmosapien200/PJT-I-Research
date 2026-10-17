@@ -166,6 +166,17 @@ def gee_cov(e2, models):
         ii = [i for i in idx if np.isfinite(g.loc[i, 'p'])]
         if ii:
             g.loc[ii, 'p_holm'] = multipletests(g.loc[ii, 'p'], method='holm')[1]
+    # B8v4 (disclosed second iteration): Holm in the family where it replaces B8 (other 10 models + B8v4)
+    for alt in ('b8v4', 'b8c'):
+        fam = g[(~g.model.isin(SENSITIVITY - {alt})) & (g.model != 'b8')]
+        for _, idx in fam.groupby(['dataset', 'cls', 'adjustment']).groups.items():
+            ii = [i for i in idx if np.isfinite(g.loc[i, 'p'])]
+            jj = [i for i in ii if g.loc[i, 'model'] == alt]
+            if jj:
+                adj = multipletests(g.loc[ii, 'p'], method='holm')[1]
+                for i, v in zip(ii, adj):
+                    if i in jj:
+                        g.loc[i, 'p_holm'] = v
     g.to_csv(os.path.join(RES, 'fix4_gee_e2_covariates.csv'), index=False)
     return g
 

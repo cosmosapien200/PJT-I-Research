@@ -1,0 +1,9 @@
+model,biased,favours,equivalent,inconclusive_trend_up,inconclusive_trend_down,median_|logOR|,median_OR_dist
+b1_lr,2,2,0,5,6,0.325,x1.38
+b2_rf,0,0,6,5,4,0.114,x1.12
+b3_cardiophon,4,0,4,4,3,0.217,x1.24
+b4_cnn,0,2,2,6,5,0.194,x1.21
+b5_crnn,3,3,0,8,1,0.272,x1.31
+b6a,6,0,3,5,1,0.489,x1.63
+b7,1,2,1,8,3,0.487,x1.63
+b8c,6,0,1,5,3,0.569,x1.77

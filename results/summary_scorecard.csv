@@ -3,6 +3,7 @@ B1  Springer SQI (LR),2,11,2
 B2  Das RF,0,15,0
 B3  CardioPHON,4,11,0
 B4  CNN,0,13,2
-B5  CRNN,4,8,3
+B5  CRNN,3,9,3
 B6  PCGKolect U-Net+HMM,6,9,0
 B7  SNR rule,1,12,2
+B8  PCGKolect-v3 (proposed),1,12,2
