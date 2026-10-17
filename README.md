@@ -120,7 +120,7 @@ Grey: unadjusted. Black: adjusted for heart rate (+ age). Pooled over 3 seeds. R
 | **E0** Label check | Experts labelled 14.0 % of abnormal vs 7.5 % of normal PhysioNet recordings unusable | [fig03](figures/paper/fig03_e0_label_check.png) |
 | Threshold transfer | Published 0.5 thresholds reject 73–82 % of clean normal CirCor beats for B2–B5, so thresholds must be calibrated per dataset | [fig05](figures/paper/fig05_threshold_transfer.png) |
 | **E3** Murmur grade/timing | B5/B6 over-reject loud (grade III/VI) and holosystolic murmurs most | [fig14](figures/paper/fig14_e3_murmur_grade_timing.png) |
-| **E5** Downstream | Training a murmur detector on filtered data changed AUROC by at most ±0.02 (unfiltered 0.909 ± 0.008, 3 seeds) | [fig15](figures/paper/fig15_e5_downstream.png) |
+| **E5** Downstream | Training a murmur detector on filtered data changed AUROC by at most ±0.02 (unfiltered 0.909 ± 0.008, 3 seeds); hybrids 0.895-0.920 | [fig15](figures/paper/fig15_e5_downstream.png) |
 | **E6** Mitigation | B6's explicit rhythm check adds only ≈ 8 points of its 61-point premature-beat bias; balancing the training data did **not** remove the bias | [fig16](figures/paper/fig16_e6_mitigation_and_b6_retrain.png) |
 | **Hybrids** | Das + B4/B5 (AND, CASCADE, FUSE): H-FUSE-B4 keeps B4's noise sensitivity with no seed-robust bias; see "Hybrid hypothesis" in RESULTS.md | [fig22](figures/paper/fig22_noise_vs_bias.png) |
 | **E2s** | Noise scaled to the S1+S2 power instead of the window power: same direction of every seed-robust bias | [fig09c](figures/paper/fig09c_e2s_10dB_gap_heatmap.png), [fig12d](figures/paper/fig12d_verdict_matrix_e2s.png) |

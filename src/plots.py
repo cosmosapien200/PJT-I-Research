@@ -1,4 +1,4 @@
-"""Figures: training curves, E2 / E2s rejection vs SNR, E3 by murmur grade/timing, E5 murmur sensitivity.
+"""Figures: training curves, E2 / E2s rejection vs SNR, E3 by murmur grade/timing, E5 murmur sensitivity, fix-1 B1 SVM ceiling.
 Seeded models (B2-B5, E6) and hybrids: mean of seeds 42-44 (results/*_seeds.csv)."""
 import os, glob
 import numpy as np, pandas as pd
@@ -111,9 +111,31 @@ def e5_figure():
     ax.legend(fontsize=8); fig.tight_layout(); fig.savefig(os.path.join(FIG, 'e5_downstream.png'), dpi=120); plt.close(fig)
 
 
+def fix1_b1svm_figure():
+    """Fix 1: B1 SVM Platt score ceiling on CirCor (seed-42 models; threshold = 90th pct of clean normal calibration beats)."""
+    from analysis import load, NORMAL
+    from common import PROC
+    ms = ['b1_svm', 'b1_lr', 'b2_rf', 'b3_cardiophon', 'b4_cnn']
+    e1, e2 = load('e1', 'circor', {m: m for m in ms}), load('e2', 'circor', {m: m for m in ms})
+    ev = e1[(e1.clean == 1) & (e1.split == 'eval')]
+    cal = e1[(e1.clean == 1) & (e1.split == 'calibration') & e1.cls.isin(NORMAL)]
+    thr = float(np.quantile(cal.b1_svm, 0.9))
+    lv = [('clean', ev)] + [(l, e2[(e2.snr_level.astype(str) == l) & (e2.split == 'eval')]) for l in ORDER[1:]]
+    pn = pd.read_csv(os.path.join(PROC, 'val_preds_b1_svm.csv'))
+    fig, ax = plt.subplots(1, 2, figsize=(14.4, 4.8))
+    ax[0].boxplot([g.b1_svm.values for _, g in lv] + [pn.score[pn.y == 1].values])
+    ax[0].set_xticks(range(1, len(lv) + 2), [l for l, _ in lv] + ['PN unusable\n(OOF)'])
+    ax[0].axhline(thr, color='r', ls='--', label=f'CirCor matched threshold ({thr:.2f})')
+    ax[0].set(title='B1 SVM P(unusable) vs added SNR, CirCor clean eval beats', xlabel='added noise SNR (dB)'); ax[0].legend(fontsize=8)
+    for m in ms:
+        ax[1].plot([l for l, _ in lv], [g[m].median() for _, g in lv], 'o-', label=m)
+    ax[1].set(title='Median score vs added SNR (CirCor)', xlabel='added noise SNR (dB)'); ax[1].legend(fontsize=8)
+    fig.tight_layout(); fig.savefig(os.path.join(FIG, 'fix1_b1svm_score_vs_snr_circor.png'), dpi=120); plt.close(fig)
+
+
 if __name__ == '__main__':
     training_curves()
-    for f in (e2_figure, lambda: e2_figure('e2s'), e3_figure, e5_figure):
+    for f in (e2_figure, lambda: e2_figure('e2s'), e3_figure, e5_figure, fix1_b1svm_figure):
         try:
             f()
         except FileNotFoundError:

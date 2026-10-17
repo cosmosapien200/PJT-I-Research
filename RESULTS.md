@@ -19,7 +19,7 @@ Retraining B4, B5 and E6 and refitting B2 and B3 with seeds 43 and 44 left Physi
 
 ## Hybrid hypothesis
 
-Six pre-specified hybrids of Das periodicity (B2) with B4 or B5 reached PhysioNet AUROC 0.970-0.977 (5-fold out-of-fold). H-FUSE-B4 (random forest on the 11 Das features + B4's penultimate embedding) matches B4's noise sensitivity (65.4 ± 2.2 % vs 65.5 ± 4.2 % of noisy normal beats rejected at 10 and 5 dB, CirCor + ZCHSound) with no seed-robust "biased against" cell and smaller adjusted class effects (mean |log OR| 0.24 vs 0.35 for B4), so it meets the pre-specified criterion; H-AND-B4 and H-CASCADE-B4 also have no biased cell but lose about 8 pp of noise sensitivity (57 %, still inside the pre-specified B4/B5 − 5 pp margin), and H-FUSE-B5 inherits two of B5's biases (MR, PFO). This is not a strict improvement over B4, which itself has no seed-robust biased cell: the hybrid's gain is smaller adjusted odds ratios, while its raw clean-beat gaps stay at B4's level (RMS 11.4 vs 11.6 pp; H-AND-B4 6.9 pp). Files: `results/noise_vs_bias.csv`, `figures/paper/fig22_noise_vs_bias.png`, verdict matrix `fig12a`.
+Six pre-specified hybrids of Das periodicity (B2) with B4 or B5 reached PhysioNet AUROC 0.970-0.977 (5-fold out-of-fold). H-FUSE-B4 (random forest on the 11 Das features + B4's penultimate embedding) matches B4's noise sensitivity (65.4 ± 2.2 % vs 65.5 ± 4.2 % of noisy normal beats rejected at 10 and 5 dB, CirCor + ZCHSound) with no seed-robust "biased against" cell and smaller adjusted class effects (mean |log OR| 0.24 vs 0.35 for B4), so it meets the pre-specified criterion; H-AND-B4 and H-CASCADE-B4 also have no biased cell but lose about 8 pp of noise sensitivity (57 %, still inside the pre-specified B4/B5 − 5 pp margin), and H-FUSE-B5 inherits two of B5's biases (MR, PFO). This is not a strict improvement over B4, which itself has no seed-robust biased cell: the hybrid's gain is smaller adjusted odds ratios, while its raw clean-beat gaps stay at B4's level (RMS 11.4 vs 11.6 pp; H-AND-B4 6.9 pp). Downstream (E5), every hybrid stays within 0.015 AUROC of the unfiltered murmur detector (0.895-0.920 vs 0.909); H-FUSE-B5 keeps only about 70 % of training beats in both classes but still reaches 0.910. Files: `results/noise_vs_bias.csv`, `figures/paper/fig22_noise_vs_bias.png`, verdict matrix `fig12a`.
 
 ## E2 (decisive): equal added noise, clean beats only
 
@@ -253,9 +253,15 @@ Patient score = mean over beats; decision threshold = Youden's J on held-out tra
 | B6a | 78.8 % | 84.8 % | 0.887 ± 0.024 | 0.755 ± 0.081 | 0.891 ± 0.024 |
 | B6b | 78.8 % | 84.9 % | 0.905 ± 0.011 | 0.787 ± 0.063 | 0.863 ± 0.049 |
 | B7 | 79.0 % | 76.7 % | 0.914 ± 0.019 | 0.838 ± 0.029 | 0.857 ± 0.011 |
+| H-AND-B4 | 88.6 % | 85.7 % | 0.911 ± 0.011 | 0.819 ± 0.070 | 0.855 ± 0.063 |
+| H-AND-B5 | 86.7 % | 86.5 % | 0.909 ± 0.029 | 0.826 ± 0.052 | 0.849 ± 0.045 |
+| H-CASCADE-B4 | 89.5 % | 86.7 % | 0.920 ± 0.015 | 0.809 ± 0.065 | 0.881 ± 0.057 |
+| H-CASCADE-B5 | 86.9 % | 86.8 % | 0.895 ± 0.029 | 0.816 ± 0.056 | 0.831 ± 0.080 |
+| H-FUSE-B4 | 88.2 % | 83.4 % | 0.914 ± 0.009 | 0.843 ± 0.054 | 0.847 ± 0.057 |
+| H-FUSE-B5 | 69.8 % | 69.9 % | 0.910 ± 0.011 | 0.826 ± 0.096 | 0.832 ± 0.081 |
 
 B5 and B6 discard murmur training beats at a higher rate than murmur-absent beats, which matches their E1/E2 bias.
-Downstream AUROC stays within about ±0.02 of the unfiltered model for every filter. B6a gives the lowest murmur
+Hybrid rows are mean ± SD over 3 filter seeds × 3 E5 seeds. Downstream AUROC stays within about ±0.02 of the unfiltered model for every filter. B6a gives the lowest murmur
 sensitivity (0.755 vs 0.815), a difference of about one seed-SD, so filtering did not clearly change murmur detection here.
 
 ## E6: mitigation
