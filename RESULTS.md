@@ -13,6 +13,14 @@ noise played back, so BMD-HS E1 numbers are confounded; rely on E2 for BMD-HS. Z
 from the Springer LR-HSMM segmenter, not from annotations. ZCHSound uses only its curated "clean" subset. B7 uses the
 clean-recording segmentation positions under added noise (oracle positions), and B7 resembles the clean-beat rule itself.
 
+## Seed robustness
+
+Retraining B4, B5 and E6 and refitting B2 and B3 with seeds 43 and 44 left PhysioNet AUROC essentially unchanged (B4 0.986 ± 0.002, B5 0.988 ± 0.001, E6 0.980 ± 0.003, B2 0.964 ± 0.000, B3 0.972 ± 0.000). The deep models' class gaps, however, move by several points between seeds: ZCHSound PFO, E2 clean, is +36.7 ± 6.7 pp for B4 and +38.9 ± 7.5 pp for B5. Of the 31 heart-rate/age-adjusted Holm-significant cells of the seed-42 analysis (main models, E2), 24 are seed-robust (significant in ≥ 2 of 3 seeds and in the pooled fit); B5's CirCor systolic murmur (OR 1.31, significant in 1/3 seeds), ZCHSound VSD and BMD-HS AR, E6's ZCHSound ASD, and the "keeps more premature beats" cells of B4, E6 and B8 are not, so B5 is left with one seed-robust bias (BMD-HS MR) and B4, E6 and B2 with none. The seed-robust biases are B6 (6 conditions: diastolic murmur, MR, MS, multi-valve, premature, AF-like), B3 (ASD, PFO, premature, AF-like), B1 (premature, AF-like), B5 (MR), B7 (VSD) and B8 (CirCor systolic murmur); the S1+S2-referenced E2s variant gives the same pattern (21 of 25 seed-42 cells robust; no "biased against" cell differs between E2 and E2s in direction). Files: `results/*_seeds.csv` (mean, SD), `results/*_per_seed.csv`, `results/gee_covariates_seeds.csv` (per-seed and pooled fits, verdict; pooled fit with independence working correlation, see ANALYSIS_PLAN.md).
+
+## Hybrid hypothesis
+
+Six pre-specified hybrids of Das periodicity (B2) with B4 or B5 reached PhysioNet AUROC 0.970-0.977 (5-fold out-of-fold). H-FUSE-B4 (random forest on the 11 Das features + B4's penultimate embedding) matches B4's noise sensitivity (65.4 ± 2.2 % vs 65.5 ± 4.2 % of noisy normal beats rejected at 10 and 5 dB, CirCor + ZCHSound) with no seed-robust "biased against" cell and smaller adjusted class effects (mean |log OR| 0.24 vs 0.35 for B4), so it meets the pre-specified criterion; H-AND-B4 and H-CASCADE-B4 also have no biased cell but lose about 8 pp of noise sensitivity (57 %, still inside the pre-specified B4/B5 − 5 pp margin), and H-FUSE-B5 inherits two of B5's biases (MR, PFO). This is not a strict improvement over B4, which itself has no seed-robust biased cell: the hybrid's gain is smaller adjusted odds ratios, while its raw clean-beat gaps stay at B4's level (RMS 11.4 vs 11.6 pp; H-AND-B4 6.9 pp). Files: `results/noise_vs_bias.csv`, `figures/paper/fig22_noise_vs_bias.png`, verdict matrix `fig12a`.
+
 ## E2 (decisive): equal added noise, clean beats only
 
 **Main contrast, CirCor systolic murmur minus normal** (`results/e2_equal_noise.csv`, matched threshold):
@@ -266,5 +274,5 @@ small cost in PhysioNet AUROC (0.982 vs 0.987).
   B3 approximates rather than reproduces the published model; there is no as-published arm. PCSCN (no code) and the
   Zabihi ensemble (optional) were not implemented.
 - EPHNOGRAM extra negatives not used; ZCHSound noisy subset not used.
-- One seed per deep model; one train/validation split.
+- One train/validation split per deep model; seeds 42-44 for B2-B5, E6 and the hybrids (section "Seed robustness"); B1, B6, B7, B8 not reseeded.
 - Full list of deviations: `DEVIATIONS.md`.

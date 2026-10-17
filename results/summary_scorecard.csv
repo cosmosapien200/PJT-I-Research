@@ -1,9 +1,18 @@
-model,over,fair,under
-B1  Springer SQI (LR),2,11,2
-B2  Das RF,0,15,0
-B3  CardioPHON,4,11,0
-B4  CNN,0,13,2
-B5  CRNN,3,9,3
-B6  PCGKolect U-Net+HMM,6,9,0
-B7  SNR rule,1,12,2
-B8  PCGKolect-v3 (proposed),1,12,2
+model,name,biased_against,no_significant_difference,keeps_more
+b1_lr,B1  Springer SQI (LR),2,11,2
+b2_rf,B2  Das RF,0,15,0
+b3_cardiophon,B3  CardioPHON,4,11,0
+b4_cnn,B4  CNN,0,14,1
+b5_crnn,B5  CRNN,1,12,2
+e6_cnn_balanced,E6  balanced CNN,0,14,1
+b6a,B6  PCGKolect U-Net+HMM,6,9,0
+b7,B7  SNR rule,1,12,2
+b8,B8  PCGKolect-v3 (proposed),1,13,1
+b8v4,B8v4  PCGKolect-v4,4,11,0
+b8c,B8c  PCGKolect-v3c,6,9,0
+h_and_b4,H-AND  Das ∧ B4,0,15,0
+h_and_b5,H-AND  Das ∧ B5,0,15,0
+h_cas_b4,H-CASCADE  Das → B4,0,14,1
+h_cas_b5,H-CASCADE  Das → B5,0,14,1
+h_fuse_b4,H-FUSE  Das + B4 emb.,0,14,1
+h_fuse_b5,H-FUSE  Das + B5 emb.,2,12,1

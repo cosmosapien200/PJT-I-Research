@@ -748,27 +748,29 @@ def noise_vs_bias():
 def f22_noise_vs_bias():
     t = noise_vs_bias()
     d = t[t.variant == 'E2'].set_index('model')
-    fig, axes = plt.subplots(1, 2, figsize=(14, 5.6))
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6.6))
     ms = [m for m, _ in ALLM] + ['e6_cnn_balanced']
     col = MCOL | {'e6_cnn_balanced': CAT[6]}; mk = MMK | {'e6_cnn_balanced': 'P'}
     ref = min(d.loc['b4_cnn', 'noise_sensitivity'], d.loc['b5_crnn', 'noise_sensitivity'])
     for ax, (ycol, ylab) in zip(axes, (('n_biased_against', 'seed-robust "biased against" conditions (of 15)'),
                                        ('mean_abs_log_or', 'mean |log OR| over the 15 conditions (adjusted, pooled)'))):
-        ax.axvspan(ref - 0.05, 1.0, color='#e8f1fb', lw=0, zorder=0)
-        ax.axvline(ref - 0.05, color=CAT[0], lw=1, ls=(0, (3, 2)))
+        ax.axvspan((ref - 0.05) * 100, 100, color='#e8f1fb', lw=0, zorder=0)
+        ax.axvline((ref - 0.05) * 100, color=CAT[0], lw=1, ls=(0, (3, 2)))
         for i, m in enumerate(ms):
             r = d.loc[m]; yv = r[ycol] + (((i % 5) - 2) * 0.06 if ycol == 'n_biased_against' else 0)
             ax.errorbar(r.noise_sensitivity * 100, yv, xerr=(r.noise_sensitivity_sd if np.isfinite(r.noise_sensitivity_sd) else 0) * 100, fmt=mk[m], ms=8,
-                        color=col[m], mec=INK if m.startswith('h_') else SURF, mew=1, elinewidth=1, capsize=0, zorder=3)
-            ax.annotate(MNAME[m], (r.noise_sensitivity * 100, yv), xytext=(6, 4), textcoords='offset points', fontsize=7.5, color=INK2)
+                        color=col[m], mec=INK if m.startswith('h_') else SURF, mew=1, elinewidth=1, capsize=0, zorder=3, label=MNAME[m])
+        ax.set_xlim(0, 80)
         ax.set_xlabel('noise sensitivity: % of noisy NORMAL beats rejected (10 + 5 dB, CirCor + ZCHSound)')
         ax.set_ylabel(ylab); ax.grid(True, color=GRID); ax.set_axisbelow(True)
     axes[0].set_title('(a) Detects noise vs number of biased conditions')
     axes[1].set_title('(b) Detects noise vs typical size of the class effect')
-    axes[0].text(ref - 0.05 + 0.005, axes[0].get_ylim()[1] * 0.97, ' within 5 pp of B4/B5', color=CAT[0], fontsize=8, va='top')
+    axes[0].text((ref - 0.05) * 100 + 0.5, axes[0].get_ylim()[1] * 0.97, ' ≥ min(B4, B5) − 5 pp', color=CAT[0], fontsize=8, va='top')
+    h, l = axes[0].get_legend_handles_labels()
+    fig.legend(h, l, ncol=8, fontsize=8, loc='lower center', bbox_to_anchor=(0.5, 0.045), frameon=False)
     fig.suptitle('Hybrid hypothesis: can a filter be as noise-sensitive as B4/B5 without their bias?  (best = right and low)', x=0.01, ha='left',
                  fontweight='bold', fontsize=12)
-    fig.tight_layout(rect=(0, 0.06, 1, 0.95))
+    fig.tight_layout(rect=(0, 0.16, 1, 0.95))
     save(fig, 'fig22_noise_vs_bias', 'E2, matched thresholds. x: mean over seeds (± SD) of the rejection rate of noisy normal evaluation beats. y: seed-robust verdict matrix (fig 12a). '
          'Hybrids (black edge) share the colour of their deep model: ▼ AND, ■ CASCADE, ◆ FUSE. Shaded: the pre-specified "close to B4/B5" region (≥ min(B4, B5) − 5 pp). Points in (a) jittered vertically.')
 

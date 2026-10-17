@@ -23,7 +23,7 @@ def training_curves():
     import re
     fs = sorted(glob.glob(os.path.join(LOGT, '*.csv')))
     cv = [f for f in fs if f.endswith('_cv.csv')]
-    deep = [f for f in fs if not f.endswith('_cv.csv') and 'e5_' not in f]
+    deep = [f for f in fs if not f.endswith('_cv.csv') and 'e5_' not in f and 'epoch' in pd.read_csv(f, nrows=0).columns]   # B8 logs are per step
     rep_ = lambda f: re.search(r'_s\d+(_f\d)?\.csv$|_f\d\.csv$', os.path.basename(f))
     groups = [('quality models (seed 42)', [f for f in deep if not rep_(f)]),
               ('seed replicates (s43, s44) and fold models (_f1-4)', [f for f in deep if rep_(f)]),
