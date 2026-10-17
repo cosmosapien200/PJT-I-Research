@@ -215,3 +215,62 @@ chosen using test results. Training uses PhysioNet 2016 only, with the same 5 pa
   conditions (adjusted verdict matrix) and mean |log OR| over those conditions (adjusted, pooled over seeds). The hypothesis
   holds for a hybrid if it has 0 seed-robust biased cells and noise sensitivity at least that of B4/B5 minus 5 pp
   (≥ min(B4, B5) − 0.05). If no hybrid meets this, that is reported plainly.
+
+---
+
+# Post-hoc analysis (2026-10-17): debiased Das + CNN hybrids (branch hybrid-debias)
+
+Requested after all results above (including the seed-robust and H-AND/H-CASCADE/H-FUSE analyses) were designed; post hoc.
+Written and committed BEFORE any of the models below is trained or any test set is scored with them. Training data:
+PhysioNet 2016 only, existing patient-grouped folds (fold 0 = validation for every deep part). Seeds 42, 43, 44 throughout;
+candidate seed s uses B4 seed s and B2 seed s.
+
+## Candidates
+* **H1 average:** percentile-normalise the B2 and B4 scores, then score = mean of the two percentiles. Percentile = mid-rank
+  empirical CDF among clean usable PhysioNet windows: usable, not augmented, from normal recordings, out-of-fold scores of the
+  training folds 1-4. The same PhysioNet reference is used at test time, and the matched threshold per test dataset follows as
+  for every model.
+* **H2 AND:** score = min of the same two percentiles.
+* **H3 fusion:** class-balanced logistic regression (standardised inputs, L2, C = 1) on the B4 penultimate embedding (128-d,
+  out-of-fold from fold-specific B4 models, folds 1-4; fold 0 = main B4) and the 11 Das features. Fit on folds 1-4; fold 0 =
+  validation; test embeddings from the main B4 of the same seed.
+* **H4 debiased fusion network:** B4 trunk (same log-mel front end and 4 conv blocks, global average pool, 128-d) concatenated
+  with the 11 Das features (z-scored with training-fold statistics) -> dropout 0.3 -> linear -> sigmoid. Trained end to end with
+  the B4 recipe: Adam 1e-3, batch 64, class-weighted BCE, max 50 epochs, early stopping on fold-0 loss of real windows,
+  patience 5.
+  - (a) Rhythm augmentation: 20 % of usable training windows (folds 1-4, with >= 4 complete annotated beats) are rebuilt from
+    their own beats: half premature (one in five beats shifted 25-40 % of the previous RR early, compensatory pause), half
+    AF-like (each RR scaled by U(0.7, 1.3)). Only the diastole is trimmed or extended, using the synthetic-set code. The
+    windows are labelled usable and added as extra copies with their source's normal/abnormal label. Built once, deterministic
+    (seed 42), shared by all H4 runs. Das features are recomputed on them.
+  - (b) Adversarial debiasing: a gradient-reversal layer on the joint 139-d embedding feeds an adversary MLP (139 + 6 subset
+    one-hot -> 64 -> ReLU -> 1) that predicts the recording's normal/abnormal label. Its loss is computed on usable windows
+    (real and rhythm-augmented). Total loss = quality BCE + lambda * adversary BCE (through the reversal).
+    lambda in {0.1, 0.3, 1.0}.
+  - 3 seeds per lambda -> 9 networks. Candidates H4-λ0.1, H4-λ0.3, H4-λ1.0.
+
+## Selection (PhysioNet only; no test data)
+Six candidates: H1, H2, H3 and H4 at the three lambda values. For every candidate and seed, on PhysioNet fold 0:
+* (i) AUROC on real (non-augmented) fold-0 windows.
+* (ii) Clean-beat pathology gap. Fold-0 beats come from hand-corrected annotations (S1 onset to next S1 onset), with at most 8
+  per recording and a 5 s window centred on each beat. Recordings are SQI 1, and beats overlapping a noise stretch are
+  excluded. The clean rule is the test sets' rule: beat SNR ≥ P30 of fold-0 normal beats. Threshold = 90th percentile of the
+  candidate's scores on clean normal fold-0 beats. Gap = rejection rate of clean abnormal minus clean normal beats, with a
+  95 % patient bootstrap CI (1,000 resamples, seed 42).
+* (iii) Rhythm gap. A synthetic rhythm set is built with the test-set synthetic code from clean normal fold-0 recordings:
+  regular, premature and AF-like kinds. Gap = (premature and AF-like pooled) minus regular, at the threshold of (ii), with a
+  95 % patient bootstrap CI.
+* **Rule.** AUROC and gaps are averaged over the 3 seeds. A candidate qualifies if the CIs of both (ii) and (iii) include 0 in
+  at least 2 of 3 seeds. The chosen model is the qualifying candidate with the highest mean AUROC. If none qualifies: the
+  smallest summed |mean gap (ii)| + |mean gap (iii)| among candidates whose mean AUROC ≥ mean B4 fold-0 AUROC (seeds 42-44)
+  − 0.01. If none is within 0.01 either, the candidate with the highest AUROC is chosen and the failure is reported. Ties ->
+  the simpler candidate (order H1, H2, H3, H4-λ0.1, H4-λ0.3, H4-λ1.0).
+  Selection table: results/hd_selection.csv. The choice is final before any test scoring.
+
+## Benchmark (chosen model, and all candidates for transparency)
+Matched thresholds, E1, E2, E2s, E3, E4, synthetic sets vs synthetic_regular, covariate GEE (Holm: each candidate added to
+the main 11-model family on its own), E5 (3 filter seeds × 3 E5 seeds) and the seed-robust verdict, exactly as in seeds.py.
+Read-out for the chosen model, stated plainly in RESULTS.md: B4-level noise sensitivity (mean rejection of noisy normal
+beats at 10 and 5 dB, CirCor + ZCHSound, ≥ B4 − 5 pp, as pre-specified for the earlier hybrids) AND 0 seed-robust "biased
+against" cells among the 15 conditions. New figure: PhysioNet validation AUROC (accuracy) vs bias (seed-robust biased cells,
+mean |log OR|), all models.
