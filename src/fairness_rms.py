@@ -25,7 +25,8 @@ MODELS = [('b1_lr', 'B1 Springer SQI'), ('b2_rf', 'B2 Das RF'), ('b3_cardiophon'
           ('b5_crnn', 'B5 CRNN'), ('e6_cnn_balanced', 'E6 balanced CNN'), ('b6a', 'B6 PCGKolect'), ('b7', 'B7 SNR rule'),
           ('b8', 'B8 PCGKolect-v3'), ('b8v4', 'B8v4 PCGKolect-v4'), ('b8c', 'B8c PCGKolect-v3c'),
           ('h_and_b4', 'H-AND Das∧B4'), ('h_and_b5', 'H-AND Das∧B5'), ('h_cas_b4', 'H-CASCADE Das→B4'), ('h_cas_b5', 'H-CASCADE Das→B5'),
-          ('h_fuse_b4', 'H-FUSE Das+B4'), ('h_fuse_b5', 'H-FUSE Das+B5')]
+          ('h_fuse_b4', 'H-FUSE Das+B4'), ('h_fuse_b5', 'H-FUSE Das+B5'),
+          ('hd_avg', 'HD1 avg'), ('hd_and', 'HD2 min'), ('hd_lr', 'HD3 LR'), ('hd_h4_l01', 'HD4 λ0.1 (chosen)'), ('hd_h4_l03', 'HD4 λ0.3'), ('hd_h4_l10', 'HD4 λ1.0')]
 LEVELS = ['none', '20', '10', '5', '0']
 NB = 1000
 
@@ -103,8 +104,8 @@ def main():
 def plot(t):
     INK, INK2, GRID, SURF = '#1f1f1d', '#5c5b57', '#e4e3df', '#fcfcfb'
     prop = {'b8', 'b8v4', 'b8c'}
-    hyb = {m for m, _ in MODELS if m.startswith('h_')}
-    fig, axes = plt.subplots(1, 3, figsize=(15, 6.6), sharey=True, facecolor=SURF)
+    hyb = {m for m, _ in MODELS if m.startswith(('h_', 'hd_'))}
+    fig, axes = plt.subplots(1, 3, figsize=(15, max(6.6, 0.3 * len(MODELS) + 1.6)), sharey=True, facecolor=SURF)
     c = t[t.scope == 'clean'].sort_values('debiased_rms_gap_pp', ascending=False).reset_index(drop=True)
     order = list(c.model)
     y = np.arange(len(order))
@@ -113,7 +114,7 @@ def plot(t):
             ('all_levels', 'debiased_rms_gap_pp', 'debiased_ci_lo', 'debiased_ci_hi', '(b) RMS gap, all noise levels', 'noise-corrected RMS gap, 15 conditions × 5 levels (pp)'),
             ('clean', 'rms_or_factor', None, None, '(c) RMS of adjusted odds ratios', 'typical OR distance from 1 (×, HR/age-adjusted)'))):
         d = t[t.scope == scope].set_index('model').loc[order]
-        cols = ['#e34948' if m in prop else ('#4a3aa7' if m in hyb else '#2a78d6') for m in order]
+        cols = ['#e34948' if m in prop else (('#0f8a8a' if m.startswith('hd_') else '#4a3aa7') if m in hyb else '#2a78d6') for m in order]
         col_ = col
         if lo:
             ax.hlines(y, d[lo], d[hi], color=cols, lw=2, alpha=0.6)

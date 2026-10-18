@@ -23,7 +23,7 @@ import analysis_fixes as F
 warnings.filterwarnings('ignore')
 SEEDS = [SEED, SEED + 1, SEED + 2]
 SEEDED = ['b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced']
-VARIES = SEEDED + A.HYBRIDS
+VARIES = SEEDED + A.HYBRIDS + A.HD
 NPROC = 12
 G = {}   # frames shared with forked workers
 

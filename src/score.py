@@ -97,7 +97,7 @@ def run(exp, ds, models):
     embs = {m: [] for m in models if m.startswith(EMBED)}
     seg = segments(ds) if 'b7' in models else None
     for level, rows, X, b in window_sets(exp, ds):
-        need_f = [m for m in models if m.startswith(('b1', 'b2'))]
+        need_f = [m for m in models if m.startswith(('b1', 'b2', 'hd_h4'))]
         if need_f:
             fp = os.path.join(SC, f'{exp}_{ds}_{level}_feats.npz')
             if os.path.exists(fp):
@@ -106,6 +106,9 @@ def run(exp, ds, models):
                 import features as F
                 b1, b2 = F.compute(X); np.savez(fp, b1=b1, b2=b2)
             for m in need_f:
+                if m.startswith('hd_h4'):   # debiased fusion network: audio + cached Das features
+                    import hd
+                    outs[m].append(hd.score_h4(m, X, b2)); continue
                 clf = joblib.load(os.path.join(MODELS, f'{m}.joblib'))
                 outs[m].append(clf.predict_proba(b1 if m.startswith('b1') else b2)[:, 1])
         b3m = [m for m in models if m.startswith('b3_cardiophon')]

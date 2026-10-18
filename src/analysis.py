@@ -14,13 +14,15 @@ warnings.filterwarnings('ignore')
 SC = os.path.join(PROC, 'scores')
 # hybrids (post hoc, pre-specified): periodicity (Das, B2) + deep model, see hybrid.py
 HYBRIDS = ['h_and_b4', 'h_and_b5', 'h_cas_b4', 'h_cas_b5', 'h_fuse_b4', 'h_fuse_b5']
-MODELS = ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b', 'b7', 'b8', 'b8v4', 'b8c', 'b6pna', 'b6pnb', 'b8noaug'] + HYBRIDS
+# debiased Das + CNN candidates (branch hybrid-debias, hd.py): H1 average, H2 AND, H3 logistic fusion, H4 debiased network (3 lambdas)
+HD = ['hd_avg', 'hd_and', 'hd_lr', 'hd_h4_l01', 'hd_h4_l03', 'hd_h4_l10']
+MODELS = ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b', 'b7', 'b8', 'b8v4', 'b8c', 'b6pna', 'b6pnb', 'b8noaug'] + HYBRIDS + HD
 # H-AND / H-CASCADE scores are percentiles of clean normal calibration beats: default threshold 0.9 (= reject the top 10 %)
 PUBLISHED = {m: 0.5 for m in MODELS} | {'b6a': 0.20, 'b6b': 0.20, 'b7': -14.0, 'b6pna': 0.20, 'b6pnb': 0.20} | \
-    {m: 0.9 for m in HYBRIDS if not m.startswith('h_fuse')}
-SENSITIVITY = {'b6pna', 'b6pnb', 'b8noaug', 'b8v4', 'b8c'} | set(HYBRIDS)   # b8v4: disclosed post-hoc iteration, own Holm family (see analysis_fixes)   # b8noaug = pre-registered ablation of B8   # fix 6 (B6 retrained on PhysioNet only): reported, not in the Holm family
+    {m: 0.9 for m in HYBRIDS + HD if m.startswith(('h_and', 'h_cas', 'hd_avg', 'hd_and'))}
+SENSITIVITY = {'b6pna', 'b6pnb', 'b8noaug', 'b8v4', 'b8c'} | set(HYBRIDS) | set(HD)   # b8v4: disclosed post-hoc iteration, own Holm family (see analysis_fixes)   # b8noaug = pre-registered ablation of B8   # fix 6 (B6 retrained on PhysioNet only): reported, not in the Holm family
 # models outside the main Holm family that get their own family: main family with B8 replaced (B8v4, B8c) or with the model added (hybrids)
-ALT_FAMILIES = {'b8v4': 'b8', 'b8c': 'b8'} | {h: None for h in HYBRIDS}
+ALT_FAMILIES = {'b8v4': 'b8', 'b8c': 'b8'} | {h: None for h in HYBRIDS + HD}
 # post hoc construction control for the synthetic rhythm sets: contrasts vs synthetic_regular (cls '<class>_vs_regular')
 VS_REGULAR = ['synthetic_premature', 'synthetic_irregular']
 DATASETS = ['circor', 'zch', 'bmdhs', 'pascal']
@@ -170,7 +172,7 @@ def b_performance(tags=None, write=True):
     """tags = {model: val_preds tag} (seed replicates); default every model under its own name."""
     rows = []
     for m, tg in (tags or {m: m for m in ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b',
-                                         'b7', 'b8', 'b8v4', 'b8c', 'b8noaug'] + HYBRIDS}).items():
+                                         'b7', 'b8', 'b8v4', 'b8c', 'b8noaug'] + HYBRIDS + HD}).items():
         p = os.path.join(PROC, f'val_preds_{tg}.csv')
         if not os.path.exists(p):
             continue

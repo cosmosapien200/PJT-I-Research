@@ -16,3 +16,9 @@ h_cas_b4,H-CASCADE  Das → B4,0,14,1
 h_cas_b5,H-CASCADE  Das → B5,0,14,1
 h_fuse_b4,H-FUSE  Das + B4 emb.,0,14,1
 h_fuse_b5,H-FUSE  Das + B5 emb.,2,12,1
+hd_avg,"HD1  avg(Das, B4)",0,15,0
+hd_and,"HD2  min(Das, B4)",0,15,0
+hd_lr,HD3  LR Das + B4 emb.,0,14,1
+hd_h4_l01,HD4  λ0.1 (chosen),0,15,0
+hd_h4_l03,HD4  λ0.3,1,13,1
+hd_h4_l10,HD4  λ1.0,1,13,1

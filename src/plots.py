@@ -11,7 +11,8 @@ ORDER = ['none', '20', '10', '5', '0']
 NAMES = {'b1_lr': 'B1 LR', 'b1_svm': 'B1 SVM', 'b2_rf': 'B2 RF', 'b3_cardiophon': 'B3 CardioPHON', 'b4_cnn': 'B4 CNN', 'b5_crnn': 'B5 CRNN',
          'e6_cnn_balanced': 'E6 balanced CNN', 'b6a': 'B6a', 'b6b': 'B6b', 'b7': 'B7 SNR', 'b6pna': 'B6pn-a (PN only)', 'b6pnb': 'B6pn-b (PN only)', 'b8': 'B8 PCGKolect-v3', 'b8noaug': 'B8 no-aug (ablation)', 'b8v4': 'B8v4 PCGKolect-v4', 'b8c': 'B8c PCGKolect-v3c',
          'h_and_b4': 'H-AND Das∧B4', 'h_and_b5': 'H-AND Das∧B5', 'h_cas_b4': 'H-CASCADE Das→B4', 'h_cas_b5': 'H-CASCADE Das→B5',
-         'h_fuse_b4': 'H-FUSE Das+B4', 'h_fuse_b5': 'H-FUSE Das+B5'}
+         'h_fuse_b4': 'H-FUSE Das+B4', 'h_fuse_b5': 'H-FUSE Das+B5',
+         'hd_avg': 'HD1 avg(Das,B4)', 'hd_and': 'HD2 min(Das,B4)', 'hd_lr': 'HD3 LR Das+B4', 'hd_h4_l01': 'HD4 λ0.1', 'hd_h4_l03': 'HD4 λ0.3', 'hd_h4_l10': 'HD4 λ1.0'}
 
 
 def seed_mean(name):

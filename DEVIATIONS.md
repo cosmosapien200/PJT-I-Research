@@ -82,3 +82,12 @@
 - E5 for hybrids: 3 filter seeds x 3 E5 seeds (9 runs per hybrid); existing filters keep their 3 E5 seeds at filter seed 42 (E5 was not part of the seed-robustness request).
 - Training for the seed replicates ran with two jobs sharing the GPU for the first jobs, then one at a time; GPU non-determinism means a seed-42 retrain would not be bit-identical, which is why seed 42 reuses the original models.
 - Pooled seed GEE uses independence working correlation instead of exchangeable (changed after seeing results): with three near-identical replicates per beat the exchangeable estimator weights patients and gave pooled ORs outside the per-seed range (B3 ZCHSound PFO 6.15 vs 3.44-3.78). Exchangeable pooled results kept as sensitivity columns. See ANALYSIS_PLAN.md.
+
+## Post-hoc analysis (2026-10-17/18): debiased hybrids HD1-HD4 (branch hybrid-debias; see ANALYSIS_PLAN.md)
+- Selection followed the pre-registered fallback: no candidate had both PhysioNet fold-0 gap CIs including 0 in >= 2 of 3 seeds; HD4 lambda 0.1 had the smallest summed |gap| among candidates within 0.01 AUROC of B4 (results/hd_selection.csv). Chosen before any test scoring.
+- HD candidates are outside the main Holm family: each is added to the 11-model family on its own, as the earlier hybrids.
+- HD1/HD2 use the percentile scale with default threshold 0.9 (as H-AND/H-CASCADE); used only in published-threshold rows.
+- Phase B AUROC for HD candidates is on PhysioNet fold 0 (the selection set), as for B4/B5; the earlier hybrids' numbers are 5-fold out-of-fold.
+- All HD candidates (not only the chosen one) were run through the full benchmark, for transparency; the read-out is for the chosen model only.
+- E5 for HD candidates: 3 filter seeds x 3 E5 seeds.
+- seeds-hybrid was merged into hybrid-debias before the analysis (ANALYSIS_PLAN.md conflict: both new sections kept).

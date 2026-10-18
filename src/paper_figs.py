@@ -33,14 +33,21 @@ plt.rcParams.update({'font.family': 'DejaVu Sans', 'font.size': 9.5, 'text.color
 
 MAIN = [('b1_lr', 'B1 Springer SQI'), ('b2_rf', 'B2 Das RF'), ('b3_cardiophon', 'B3 CardioPHON'), ('b4_cnn', 'B4 CNN'),
         ('b5_crnn', 'B5 CRNN'), ('b6a', 'B6 PCGKolect'), ('b7', 'B7 SNR rule'), ('b8', 'B8 PCGKolect-v3')]
-HYB = [('h_and_b4', 'H-AND Das∧B4'), ('h_and_b5', 'H-AND Das∧B5'), ('h_cas_b4', 'H-CASCADE Das→B4'), ('h_cas_b5', 'H-CASCADE Das→B5'),
-       ('h_fuse_b4', 'H-FUSE Das+B4'), ('h_fuse_b5', 'H-FUSE Das+B5')]
+HYB0 = [('h_and_b4', 'H-AND Das∧B4'), ('h_and_b5', 'H-AND Das∧B5'), ('h_cas_b4', 'H-CASCADE Das→B4'), ('h_cas_b5', 'H-CASCADE Das→B5'),
+        ('h_fuse_b4', 'H-FUSE Das+B4'), ('h_fuse_b5', 'H-FUSE Das+B5')]
+HD = [('hd_avg', 'HD1 avg Das,B4'), ('hd_and', 'HD2 min Das,B4'), ('hd_lr', 'HD3 LR Das+B4 emb.'),
+      ('hd_h4_l01', 'HD4 λ0.1 (chosen)'), ('hd_h4_l03', 'HD4 λ0.3'), ('hd_h4_l10', 'HD4 λ1.0')]   # debiased hybrids (branch hybrid-debias)
+HYB = HYB0 + HD
 ALLM = MAIN + HYB                      # every combined result figure shows the hybrids too
 SEEDED = {'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced'} | {m for m, _ in HYB}
 SEEDS = [42, 43, 44]
-MCOL = {m: CAT[i] for i, (m, _) in enumerate(MAIN)} | {m: (CAT[3] if m.endswith('b4') else CAT[4]) for m, _ in HYB}
-MLS = {m: '-' for m, _ in MAIN} | {m: {'and': (0, (4, 2)), 'cas': (0, (1, 1.5)), 'fus': (0, (5, 1.5, 1, 1.5))}[m[2:5]] for m, _ in HYB}
-MMK = {m: 'o' for m, _ in MAIN} | {m: {'and': 'v', 'cas': 's', 'fus': 'D'}[m[2:5]] for m, _ in HYB}
+HDC, H4C = '#0f8a8a', '#7a1f5c'
+MCOL = {m: CAT[i] for i, (m, _) in enumerate(MAIN)} | {m: (CAT[3] if m.endswith('b4') else CAT[4]) for m, _ in HYB0} \
+    | {m: (H4C if m.startswith('hd_h4') else HDC) for m, _ in HD}
+HDLS = {'hd_avg': (0, (2, 1)), 'hd_and': (0, (4, 2)), 'hd_lr': (0, (5, 1.5, 1, 1.5)), 'hd_h4_l01': '-', 'hd_h4_l03': (0, (6, 2)), 'hd_h4_l10': (0, (1, 1.5))}
+HDMK = {'hd_avg': 'P', 'hd_and': 'v', 'hd_lr': 'D', 'hd_h4_l01': '*', 'hd_h4_l03': 'X', 'hd_h4_l10': 'h'}
+MLS = {m: '-' for m, _ in MAIN} | {m: {'and': (0, (4, 2)), 'cas': (0, (1, 1.5)), 'fus': (0, (5, 1.5, 1, 1.5))}[m[2:5]] for m, _ in HYB0} | HDLS
+MMK = {m: 'o' for m, _ in MAIN} | {m: {'and': 'v', 'cas': 's', 'fus': 'D'}[m[2:5]] for m, _ in HYB0} | HDMK
 MNAME = dict(MAIN) | dict(HYB) | {'b1_svm': 'B1 SVM', 'e6_cnn_balanced': 'E6 balanced CNN', 'b6b': 'B6b (+rhythm check)',
                       'b6pna': 'B6 PhysioNet-only', 'b6pnb': 'B6b PhysioNet-only', 'b8noaug': 'B8 without rhythm aug.', 'b8v4': 'B8v4 PCGKolect-v4', 'b8c': 'B8c PCGKolect-v3c'}
 COLS = [('circor', 'murmur_systolic', 'Systolic murmur'), ('circor', 'murmur_diastolic', 'Diastolic murmur*'),
@@ -427,7 +434,7 @@ def f11_forest():
                         label=lab if yy == y[0] else None)
         ax.set_xscale('log'); ax.set_xlim(0.15, 30); ax.set_xticks([0.2, 0.5, 1, 2, 5, 20], ['0.2', '0.5', '1', '2', '5', '20'])
         ax.set_title(title, fontsize=10); ax.xaxis.grid(True, color=GRID); ax.set_axisbelow(True)
-        ax.axhline(len(HYB) - 0.5, color=GRID, lw=1.2)
+        ax.axhline(len(HYB) - 0.5, color=GRID, lw=1.2); ax.axhline(len(HD) - 0.5, color=GRID, lw=1.2)
         ax.set_yticks(y, [n for _, n in ALLM])
     for ax in axes[1]:
         ax.set_xlabel('odds ratio of rejection vs normal (log scale)')
@@ -577,13 +584,14 @@ def f15_e5():
     ax.axhline(t[t.filter_model == 'unfiltered'].auroc_mean.iloc[0], color=CAT[0], lw=1, ls=(0, (3, 2)))
     short = {'b1_lr': 'B1', 'b2_rf': 'B2', 'b3_cardiophon': 'B3', 'b4_cnn': 'B4', 'b5_crnn': 'B5', 'e6_cnn_balanced': 'E6',
              'b6a': 'B6', 'b6b': 'B6b', 'b7': 'B7', 'b8': 'B8', 'b8v4': 'B8v4', 'b8c': 'B8c', 'b8noaug': 'B8na', 'unfiltered': 'none',
-             'h_and_b4': 'AND\nB4', 'h_and_b5': 'AND\nB5', 'h_cas_b4': 'CAS\nB4', 'h_cas_b5': 'CAS\nB5', 'h_fuse_b4': 'FUSE\nB4', 'h_fuse_b5': 'FUSE\nB5'}
+             'h_and_b4': 'AND\nB4', 'h_and_b5': 'AND\nB5', 'h_cas_b4': 'CAS\nB4', 'h_cas_b5': 'CAS\nB5', 'h_fuse_b4': 'FUSE\nB4', 'h_fuse_b5': 'FUSE\nB5',
+             'hd_avg': 'HD1', 'hd_and': 'HD2', 'hd_lr': 'HD3', 'hd_h4_l01': 'HD4\n.1', 'hd_h4_l03': 'HD4\n.3', 'hd_h4_l10': 'HD4\n1.0'}
     ax.set_xticks(x, [short.get(m, m) for m in t.filter_model], fontsize=7.5)
     ax.set_ylim(0.6, 1); ax.legend(fontsize=8, ncol=3, loc='upper center'); ax.yaxis.grid(True, color=GRID); ax.set_axisbelow(True)
     ax.set_title('(b) Murmur detection on the test 40 %\n(patient level, mean ± SD over runs)')
     fig.tight_layout(rect=(0, 0.05, 1, 1))
     save(fig, 'fig15_e5_downstream', 'Murmur CNN (B4 architecture), patient score = mean over beats, threshold = Youden J on held-out training patients. '
-         'Existing filters: 3 E5 seeds; hybrids: 3 filter seeds × 3 E5 seeds.')
+         'Existing filters: 3 E5 seeds; hybrids and debiased hybrids: 3 filter seeds × 3 E5 seeds.')
 
 
 # ------------------------------------------------------------------ F16 E6 mitigation + B6 retrain
@@ -759,7 +767,7 @@ def f22_noise_vs_bias():
         for i, m in enumerate(ms):
             r = d.loc[m]; yv = r[ycol] + (((i % 5) - 2) * 0.06 if ycol == 'n_biased_against' else 0)
             ax.errorbar(r.noise_sensitivity * 100, yv, xerr=(r.noise_sensitivity_sd if np.isfinite(r.noise_sensitivity_sd) else 0) * 100, fmt=mk[m], ms=8,
-                        color=col[m], mec=INK if m.startswith('h_') else SURF, mew=1, elinewidth=1, capsize=0, zorder=3, label=MNAME[m])
+                        color=col[m], mec=INK if m.startswith(('h_', 'hd_')) else SURF, mew=1, elinewidth=1, capsize=0, zorder=3, label=MNAME[m])
         ax.set_xlim(0, 80)
         ax.set_xlabel('noise sensitivity: % of noisy NORMAL beats rejected (10 + 5 dB, CirCor + ZCHSound)')
         ax.set_ylabel(ylab); ax.grid(True, color=GRID); ax.set_axisbelow(True)
@@ -772,11 +780,39 @@ def f22_noise_vs_bias():
                  fontweight='bold', fontsize=12)
     fig.tight_layout(rect=(0, 0.16, 1, 0.95))
     save(fig, 'fig22_noise_vs_bias', 'E2, matched thresholds. x: mean over seeds (± SD) of the rejection rate of noisy normal evaluation beats. y: seed-robust verdict matrix (fig 12a). '
-         'Hybrids (black edge) share the colour of their deep model: ▼ AND, ■ CASCADE, ◆ FUSE. Shaded: the pre-specified "close to B4/B5" region (≥ min(B4, B5) − 5 pp). Points in (a) jittered vertically.')
+         'Hybrids (black edge) share the colour of their deep model: ▼ AND, ■ CASCADE, ◆ FUSE; debiased hybrids (teal HD1-3, plum HD4 by λ). Shaded: the pre-specified "close to B4/B5" region (≥ min(B4, B5) − 5 pp). Points in (a) jittered vertically.')
+
+
+def f23_accuracy_vs_bias():
+    """hybrid-debias: PhysioNet validation AUROC (Phase B, mean over seeds) vs bias (fig 22's E2 bias measures). -> results/accuracy_vs_bias.csv"""
+    b = rs('b_quality_performance').set_index('model')
+    d = rd('noise_vs_bias.csv'); d = d[d.variant == 'E2'].set_index('model')
+    ms = [m for m in [m for m, _ in ALLM] + ['e6_cnn_balanced'] if m in b.index and m in d.index]
+    t = d.loc[ms, ['name', 'noise_sensitivity', 'n_biased_against', 'mean_abs_log_or']].assign(
+        val_auroc=b.loc[ms, 'auroc'], val_auroc_sd=b.loc[ms, 'auroc_sd'] if 'auroc_sd' in b else np.nan)
+    t.reset_index().to_csv(os.path.join(RES, 'accuracy_vs_bias.csv'), index=False)
+    col = MCOL | {'e6_cnn_balanced': CAT[6]}; mk = MMK | {'e6_cnn_balanced': 'P'}
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6.6))
+    for ax, (ycol, ylab) in zip(axes, (('n_biased_against', 'seed-robust "biased against" conditions (of 15)'),
+                                       ('mean_abs_log_or', 'mean |log OR| over the 15 conditions (adjusted, pooled)'))):
+        ax.axvspan(t.loc['b4_cnn', 'val_auroc'] - 0.01, 1, color='#e8f1fb', lw=0, zorder=0)
+        for i, m in enumerate(ms):
+            r = t.loc[m]; yv = r[ycol] + (((i % 5) - 2) * 0.06 if ycol == 'n_biased_against' else 0)
+            ax.errorbar(r.val_auroc, yv, xerr=r.val_auroc_sd if np.isfinite(r.val_auroc_sd) else 0, fmt=mk[m], ms=11 if m == 'hd_h4_l01' else 8,
+                        color=col[m], mec=INK if m.startswith(('h_', 'hd_')) else SURF, mew=1, elinewidth=1, capsize=0, zorder=3, label=MNAME[m])
+        ax.set_xlim(0.75, 1.0); ax.set_xlabel('PhysioNet validation AUROC (usable vs unusable; mean over seeds)')
+        ax.set_ylabel(ylab); ax.grid(True, color=GRID); ax.set_axisbelow(True)
+    axes[0].set_title('(a) Accuracy vs number of biased conditions'); axes[1].set_title('(b) Accuracy vs typical size of the class effect')
+    h, l = axes[0].get_legend_handles_labels()
+    fig.legend(h, l, ncol=7, fontsize=8, loc='lower center', bbox_to_anchor=(0.5, 0.03), frameon=False)
+    fig.suptitle('Debiased hybrids: accuracy vs bias, all models  (best = right and low)', x=0.01, ha='left', fontweight='bold', fontsize=12)
+    fig.tight_layout(rect=(0, 0.17, 1, 0.95))
+    save(fig, 'fig23_accuracy_vs_bias', 'x: Phase B AUROC (B1-B3 and hybrids 5-fold out-of-fold; B4/B5/E6/HD4 held-out fold 0; B6/B7 all windows, optimistic), mean ± SD over seeds. '
+         'y: E2 seed-robust verdict matrix (fig 12a) and mean |adjusted log OR|. Shaded: within 0.01 AUROC of B4 (the selection rule\'s accuracy margin). Large star = chosen HD4 λ0.1.')
 
 
 if __name__ == '__main__':
     for f in (f01_pipeline, f02_datasets, f03_e0, f04_models, f05_thresholds, f06_example, f07_diagnostics, f08_f09_gaps,
               f10_gap_vs_snr, f11_forest, f12_verdict, f13_confound, f14_e3, f15_e5, f16_e6, f17_recal, f18_b6_ties, f19_misc,
-              f22_noise_vs_bias):
+              f22_noise_vs_bias, f23_accuracy_vs_bias):
         f()
