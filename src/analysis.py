@@ -2,7 +2,8 @@
 
   python analysis.py
 Outputs: results/b_quality_performance.csv, c_thresholds.csv, d_clean_pass_rates.csv, e1_raw.csv,
-e2_equal_noise.csv, e3_breakdown.csv, e4_by_dataset.csv, e6_mitigation.csv, f_gee_e2.csv
+e2_equal_noise.csv, e2s_equal_noise.csv, e3_breakdown.csv, e4_by_dataset.csv, e6_mitigation.csv, f_gee_e2.csv, f_gee_e2s.csv
+(seed-42 replicate; per-seed replicates and seed-robust verdicts: seeds.py). E2s = S1+S2-referenced E2 variant (post hoc).
 """
 import os, warnings
 import numpy as np, pandas as pd
@@ -11,9 +12,17 @@ from common import PROC, RES, MAN, SEED, stable_seed
 
 warnings.filterwarnings('ignore')
 SC = os.path.join(PROC, 'scores')
-MODELS = ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b', 'b7', 'b6pna', 'b6pnb']
-PUBLISHED = {m: 0.5 for m in MODELS} | {'b6a': 0.20, 'b6b': 0.20, 'b7': -14.0, 'b6pna': 0.20, 'b6pnb': 0.20}
-SENSITIVITY = {'b6pna', 'b6pnb'}   # fix 6 (B6 retrained on PhysioNet only): reported, not in the Holm family
+# hybrids (post hoc, pre-specified): periodicity (Das, B2) + deep model, see hybrid.py
+HYBRIDS = ['h_and_b4', 'h_and_b5', 'h_cas_b4', 'h_cas_b5', 'h_fuse_b4', 'h_fuse_b5']
+MODELS = ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b', 'b7', 'b8', 'b8v4', 'b8c', 'b6pna', 'b6pnb', 'b8noaug'] + HYBRIDS
+# H-AND / H-CASCADE scores are percentiles of clean normal calibration beats: default threshold 0.9 (= reject the top 10 %)
+PUBLISHED = {m: 0.5 for m in MODELS} | {'b6a': 0.20, 'b6b': 0.20, 'b7': -14.0, 'b6pna': 0.20, 'b6pnb': 0.20} | \
+    {m: 0.9 for m in HYBRIDS if not m.startswith('h_fuse')}
+SENSITIVITY = {'b6pna', 'b6pnb', 'b8noaug', 'b8v4', 'b8c'} | set(HYBRIDS)   # b8v4: disclosed post-hoc iteration, own Holm family (see analysis_fixes)   # b8noaug = pre-registered ablation of B8   # fix 6 (B6 retrained on PhysioNet only): reported, not in the Holm family
+# models outside the main Holm family that get their own family: main family with B8 replaced (B8v4, B8c) or with the model added (hybrids)
+ALT_FAMILIES = {'b8v4': 'b8', 'b8c': 'b8'} | {h: None for h in HYBRIDS}
+# post hoc construction control for the synthetic rhythm sets: contrasts vs synthetic_regular (cls '<class>_vs_regular')
+VS_REGULAR = ['synthetic_premature', 'synthetic_irregular']
 DATASETS = ['circor', 'zch', 'bmdhs', 'pascal']
 NORMAL = {'normal', 'control'}
 NOT_PATH = NORMAL | {'unknown', 'murmur_patient_other_location', 'no_murmur_abnormal_outcome'}
@@ -36,13 +45,14 @@ def drop_excluded(df):
 
 
 # ---------------------------------------------------------------- loading
-def load(exp, ds):
+def load(exp, ds, tags=None):
+    """Index + score columns; tags = {column: score-file tag} (default: every model under its own name)."""
     p = os.path.join(SC, f'{exp}_{ds}_index.csv')
     if not os.path.exists(p):
         return None
     df = pd.read_csv(p, low_memory=False)
-    for m in MODELS:
-        f = os.path.join(SC, f'{exp}_{ds}_{m}.npy')
+    for m, t in (tags or {m: m for m in MODELS}).items():
+        f = os.path.join(SC, f'{exp}_{ds}_{t}.npy')
         if os.path.exists(f):
             df[m] = np.load(f)
     if ds == 'synth':
@@ -50,13 +60,14 @@ def load(exp, ds):
     return df
 
 
-def all_scores():
-    e1 = pd.concat([d for d in (load('e1', ds) for ds in DATASETS + ['synth']) if d is not None], ignore_index=True)
-    e2 = pd.concat([d for d in (load('e2', ds) for ds in DATASETS + ['synth']) if d is not None], ignore_index=True)
+def all_scores(variant='e2', tags=None):
+    """E1 and an equal-noise variant ('e2' window-referenced, 'e2s' S1+S2-referenced) for all test sets."""
+    e1 = pd.concat([d for d in (load('e1', ds, tags) for ds in DATASETS + ['synth']) if d is not None], ignore_index=True)
+    e2 = pd.concat([d for d in (load(variant, ds, tags) for ds in DATASETS + ['synth']) if d is not None], ignore_index=True)
     # E2 no-noise level = E1 scores of clean evaluation beats
     e2 = pd.concat([e1[(e1.clean == 1) & (e1.split == 'eval')].assign(snr_level='none'), e2], ignore_index=True)
     e2['snr_level'] = e2.snr_level.astype(str)
-    models = [m for m in MODELS if m in e1 and e1[m].notna().all()]
+    models = [m for m in (tags or MODELS) if m in e1 and e1[m].notna().all() and m in e2 and e2[m].notna().all()]
     return e1, e2, models
 
 
@@ -98,7 +109,7 @@ def rate_ci(df, col, ref=None, seed=SEED):
 
 
 # ---------------------------------------------------------------- thresholds
-def thresholds(e1, models):
+def thresholds(e1, models, write=False):
     rows = []
     for ds in DATASETS:
         cal = e1[(e1.dataset == ds) & (e1.split == 'calibration') & e1.cls.isin(NORMAL) & (e1.clean == 1)]
@@ -114,7 +125,8 @@ def thresholds(e1, models):
                              cal_reject_rate_matched=p_gt + q * p_eq, tie_rule='reject_all_ties' if p_eq > TIE_MASS_MAX else 'randomised',
                              cal_reject_rate_published=float((v > PUBLISHED[m]).mean())))
     t = pd.DataFrame(rows)
-    t.to_csv(os.path.join(RES, 'c_thresholds.csv'), index=False)
+    if write:
+        t.to_csv(os.path.join(RES, 'c_thresholds.csv'), index=False)
     return t
 
 
@@ -144,13 +156,22 @@ def table(df, models, by, level_col=None):
                     col = f'{m}__{tt}'
                     r = rate_ci(gc, col, None if gc.cls.isin(NORMAL).all() else ref)
                     rows.append(dict(zip(keys, k)) | {by: c, 'model': m, 'threshold': tt} | r)
+        reg = g[g.cls == 'synthetic_regular']
+        if len(reg) and by == 'cls':   # construction control: synthetic rhythm vs synthetic_regular
+            for c in VS_REGULAR:
+                gc = g[g.cls == c]
+                for m in models:
+                    for tt in ('matched', 'published'):
+                        rows.append(dict(zip(keys, k)) | {by: f'{c}_vs_regular', 'model': m, 'threshold': tt} | rate_ci(gc, f'{m}__{tt}', reg))
     return pd.DataFrame(rows)
 
 
-def b_performance():
+def b_performance(tags=None, write=True):
+    """tags = {model: val_preds tag} (seed replicates); default every model under its own name."""
     rows = []
-    for m in ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b', 'b7']:
-        p = os.path.join(PROC, f'val_preds_{m}.csv')
+    for m, tg in (tags or {m: m for m in ['b1_lr', 'b1_svm', 'b2_rf', 'b3_cardiophon', 'b4_cnn', 'b5_crnn', 'e6_cnn_balanced', 'b6a', 'b6b',
+                                         'b7', 'b8', 'b8v4', 'b8c', 'b8noaug'] + HYBRIDS}).items():
+        p = os.path.join(PROC, f'val_preds_{tg}.csv')
         if not os.path.exists(p):
             continue
         v = pd.read_csv(p)
@@ -161,28 +182,60 @@ def b_performance():
         ev = {'b1_lr': '5-fold out-of-fold', 'b1_svm': '5-fold out-of-fold', 'b2_rf': '5-fold out-of-fold', 'b3_cardiophon': '5-fold out-of-fold',
               'b6a': 'all windows (not trained on quality labels; seen in training)',
               'b6b': 'all windows (not trained on quality labels; seen in training)',
-              'b7': 'all windows (annotation-based, not trained)'}.get(m, 'validation fold 0')
+              'b7': 'all windows (annotation-based, not trained)', 'b8': 'validation fold 0', 'b8noaug': 'validation fold 0', 'b8v4': 'validation fold 0', 'b8c': 'validation fold 0'} \
+            .get(m, '5-fold out-of-fold (nested for H-FUSE)' if m in HYBRIDS else 'validation fold 0')
         rows.append(dict(model=m, eval_set=ev, n_windows=len(y), auroc=roc_auc_score(y, s),
                          balanced_acc=balanced_accuracy_score(y, pr), sensitivity=pr[y == 1].mean(),
                          specificity=1 - pr[y == 0].mean(), eer=(fpr[i] + 1 - tpr[i]) / 2, threshold=PUBLISHED[m]))
     df = pd.DataFrame(rows)
-    df.to_csv(os.path.join(RES, 'b_quality_performance.csv'), index=False)
+    if write:
+        df.to_csv(os.path.join(RES, 'b_quality_performance.csv'), index=False)
     return df
 
 
-def gee(e2, models):
+def contrasts(d, ds):
+    """(label, pathological class, reference classes) for one dataset: every class vs normal, plus (CirCor) the synthetic
+    rhythm sets vs synthetic_regular."""
+    out = [(c, c, list(NORMAL)) for c in d.cls.unique() if c not in NORMAL]
+    if ds == 'circor' and (d.cls == 'synthetic_regular').any():
+        out += [(f'{c}_vs_regular', c, ['synthetic_regular']) for c in VS_REGULAR]
+    return out
+
+
+def holm(g, keys, p='p', out='p_holm'):
+    """Holm across the main model family per keys; models in ALT_FAMILIES get their own family (main with B8 replaced, or
+    main plus the model)."""
+    from statsmodels.stats.multitest import multipletests
+    g[out] = np.nan
+    for _, idx in g[~g.model.isin(SENSITIVITY)].groupby(keys).groups.items():
+        ii = [i for i in idx if np.isfinite(g.loc[i, p])]
+        if ii:
+            g.loc[ii, out] = multipletests(g.loc[ii, p], method='holm')[1]
+    for alt, rep in ALT_FAMILIES.items():
+        fam = g[(~g.model.isin(SENSITIVITY - {alt})) & (g.model != rep)]
+        for _, idx in fam.groupby(keys).groups.items():
+            ii = [i for i in idx if np.isfinite(g.loc[i, p])]
+            jj = [i for i in ii if g.loc[i, 'model'] == alt]
+            if jj:
+                adj = multipletests(g.loc[ii, p], method='holm')[1]
+                for i, v in zip(ii, adj):
+                    if i in jj:
+                        g.loc[i, out] = v
+    return g
+
+
+def gee(e2, models, out='f_gee_e2.csv', adjust=True):
+    """Unadjusted GEE per model x contrast; Holm across models unless adjust=False (seeds.py adjusts after merging)."""
     import statsmodels.api as sm
     import statsmodels.formula.api as smf
-    from statsmodels.stats.multitest import multipletests
     rows = []
     for ds in DATASETS:
         d = e2[e2.dataset == ds]
-        classes = [c for c in d.cls.unique() if c not in NORMAL]
         for m in models:
             col = f'{m}__matched'
-            for c in classes:
-                sub = d[d.cls.isin([c] + list(NORMAL))].copy()
-                sub['y'] = sub[col]; sub['path'] = (~sub.cls.isin(NORMAL)).astype(int)
+            for c, pc, ref in contrasts(d, ds):
+                sub = d[d.cls.isin([pc] + ref)].copy()
+                sub['y'] = sub[col]; sub['path'] = (sub.cls == pc).astype(int)
                 sub = sub.sort_values('patient_id')
                 # drop noise levels with no variation in this contrast (complete separation; no class information)
                 var = sub.groupby('snr_level').y.transform(lambda v: 0 < v.mean() < 1).astype(bool)
@@ -220,38 +273,29 @@ def gee(e2, models):
                 rows.append(base | dict(odds_ratio=np.exp(b), or_ci_lo=np.exp(b - 1.96 * se), or_ci_hi=np.exp(b + 1.96 * se),
                                         p=p, cov_struct=cs_name, note='') | ind)
     g = drop_excluded(pd.DataFrame(rows))
-    g['p_holm'] = np.nan
-    for (ds, c), idx in g[~g.model.isin(SENSITIVITY)].groupby(['dataset', 'cls']).groups.items():
-        ok = g.loc[idx, 'p'].notna()
-        if ok.any():
-            ii = g.loc[idx][ok].index
-            g.loc[ii, 'p_holm'] = multipletests(g.loc[ii, 'p'], method='holm')[1]
-    g.to_csv(os.path.join(RES, 'f_gee_e2.csv'), index=False)
+    if adjust:
+        g = holm(g, ['dataset', 'cls'])
+    if out:
+        g.to_csv(os.path.join(RES, out), index=False)
     return g
 
 
-def main():
-    b_performance()
-    e1, e2, models = all_scores()
-    thr = thresholds(e1, models)
-    e1 = add_rejections(e1, thr, models); e2 = add_rejections(e2, thr, models)
+def replicate(e1, e2, e2s, models, write=False):
+    """Every Phase C-F table for one set of model scores (one seed). e1/e2/e2s must already carry rejection columns.
+    Returns a dict of DataFrames; write=True writes the canonical results/*.csv (seed-42 replicate)."""
+    R = {}
     ev1 = e1[e1.split == 'eval']
-    ev1[['beat_id', 'patient_id', 'dataset', 'cls', 'clean']].to_csv(os.path.join(PROC, 'eval_e1_beats.csv'), index=False)
+    W = lambda name, df: df.to_csv(os.path.join(RES, name), index=False) if write else None
 
-    # D: clean pass rates (evaluation beats)
-    rows = []
-    for (ds, c), g in ev1.groupby(['dataset', 'cls']):
-        rows.append(dict(dataset=ds, cls=c) | rate_ci(g, 'clean', None if c in NORMAL else ev1[(ev1.dataset == ds) & ev1.cls.isin(NORMAL)]))
-    pd.DataFrame(rows).rename(columns={'rate': 'clean_pass_rate'}).to_csv(os.path.join(RES, 'd_clean_pass_rates.csv'), index=False)
-
-    # E1, E2
-    t1 = drop_excluded(table(ev1, models, 'cls')); t1.to_csv(os.path.join(RES, 'e1_raw.csv'), index=False)
-    t2 = drop_excluded(table(e2, models, 'cls', 'snr_level')); t2.to_csv(os.path.join(RES, 'e2_equal_noise.csv'), index=False)
+    # E1, E2, E2s
+    R['e1'] = drop_excluded(table(ev1, models, 'cls')); W('e1_raw.csv', R['e1'])
+    R['e2'] = drop_excluded(table(e2, models, 'cls', 'snr_level')); W('e2_equal_noise.csv', R['e2'])
+    R['e2s'] = drop_excluded(table(e2s, models, 'cls', 'snr_level')); W('e2s_equal_noise.csv', R['e2s'])
 
     # E3 breakdowns
     lab = extra_labels()
     rows = []
-    for exp, df in (('E1', ev1.assign(snr_level='raw')), ('E2', e2)):
+    for exp, df in (('E1', ev1.assign(snr_level='raw')), ('E2', e2), ('E2s', e2s)):
         df = df.merge(lab, on='record_id', how='left', suffixes=('', '_m'))
         cc = df[df.dataset == 'circor']
         for var in ('sys_timing', 'sys_grade', 'sys_shape'):
@@ -271,18 +315,23 @@ def main():
                         rows.append(dict(experiment=exp, dataset=ds, snr_level=lv, breakdown='disease_present', value=f, model=m,
                                          threshold='matched') | rate_ci(g, f'{m}__matched', ref))
         for ds, classes in (('zch', ['ASD', 'VSD', 'PFO', 'PDA']), ('bmdhs', ['AS', 'AR', 'MR', 'MS', 'multi']),
-                            ('pascal', ['murmur', 'extrasystole']), ('circor', ['synthetic_premature', 'synthetic_irregular'])):
+                            ('pascal', ['murmur', 'extrasystole']), ('circor', ['synthetic_premature', 'synthetic_irregular', 'synthetic_regular'])):
             d = df[df.dataset == ds]
             for (lv, c), g in d[d.cls.isin(classes)].groupby(['snr_level', 'cls']):
                 ref = d[(d.snr_level == lv) & d.cls.isin(NORMAL)]
                 for m in models:
                     rows.append(dict(experiment=exp, dataset=ds, snr_level=lv, breakdown='class', value=c, model=m,
                                      threshold='matched') | rate_ci(g, f'{m}__matched', ref))
-    drop_excluded(pd.DataFrame(rows)).to_csv(os.path.join(RES, 'e3_breakdown.csv'), index=False)
+                if c in VS_REGULAR:   # construction control
+                    reg = d[(d.snr_level == lv) & (d.cls == 'synthetic_regular')]
+                    for m in models:
+                        rows.append(dict(experiment=exp, dataset=ds, snr_level=lv, breakdown='class_vs_synthetic_regular', value=c,
+                                         model=m, threshold='matched') | rate_ci(g, f'{m}__matched', reg))
+    R['e3'] = drop_excluded(pd.DataFrame(rows)); W('e3_breakdown.csv', R['e3'])
 
     # E4: pooled pathological vs normal per dataset
     rows = []
-    for exp, df in (('E1', ev1.assign(snr_level='raw')), ('E2', e2)):
+    for exp, df in (('E1', ev1.assign(snr_level='raw')), ('E2', e2), ('E2s', e2s)):
         df = df[~df.cls.isin(NOT_PATH - NORMAL) & ~df.cls.str.startswith('synthetic')]
         for (ds, lv), g in df.groupby(['dataset', 'snr_level']):
             ref, path = g[g.cls.isin(NORMAL)], g[~g.cls.isin(NORMAL)]
@@ -293,14 +342,34 @@ def main():
                                  pathological_classes='+'.join(sorted(path.cls.unique())), normal_rate=r0['rate'],
                                  pathological_rate=r['rate'], gap=r['diff_vs_normal'], gap_ci_lo=r['diff_ci_lo'],
                                  gap_ci_hi=r['diff_ci_hi'], n_path_patients=r['n_patients'], n_normal_patients=r0['n_patients']))
-    e4 = drop_excluded(pd.DataFrame(rows)); e4.to_csv(os.path.join(RES, 'e4_by_dataset.csv'), index=False)
+    e4 = drop_excluded(pd.DataFrame(rows)); R['e4'] = e4; W('e4_by_dataset.csv', e4)
 
     # E6: (a) B6a vs B6b, (b) balanced CNN vs B4 on E2 (pooled gaps from E4 + per-class E2)
     e6 = e4[e4.model.isin(['b6a', 'b6b', 'b4_cnn', 'e6_cnn_balanced'])].copy()
     e6['comparison'] = np.where(e6.model.isin(['b6a', 'b6b']), 'a: rhythm check (B6a vs B6b)', 'b: balanced training (B4 vs E6)')
-    e6.to_csv(os.path.join(RES, 'e6_mitigation.csv'), index=False)
+    R['e6'] = e6; W('e6_mitigation.csv', e6)
 
-    gee(e2, models)
+    R['gee_e2'] = gee(e2, models, 'f_gee_e2.csv' if write else None, adjust=write)
+    R['gee_e2s'] = gee(e2s, models, 'f_gee_e2s.csv' if write else None, adjust=write)
+    return R
+
+
+def main():
+    b_performance()
+    e1, e2, models = all_scores()
+    _, e2s, models_s = all_scores('e2s')
+    models = [m for m in models if m in models_s]
+    thr = thresholds(e1, models, write=True)
+    e1 = add_rejections(e1, thr, models); e2 = add_rejections(e2, thr, models); e2s = add_rejections(e2s, thr, models)
+    ev1 = e1[e1.split == 'eval']
+    ev1[['beat_id', 'patient_id', 'dataset', 'cls', 'clean']].to_csv(os.path.join(PROC, 'eval_e1_beats.csv'), index=False)
+
+    # D: clean pass rates (evaluation beats)
+    rows = []
+    for (ds, c), g in ev1.groupby(['dataset', 'cls']):
+        rows.append(dict(dataset=ds, cls=c) | rate_ci(g, 'clean', None if c in NORMAL else ev1[(ev1.dataset == ds) & ev1.cls.isin(NORMAL)]))
+    pd.DataFrame(rows).rename(columns={'rate': 'clean_pass_rate'}).to_csv(os.path.join(RES, 'd_clean_pass_rates.csv'), index=False)
+    replicate(e1, e2, e2s, models, write=True)
     print('analysis done; models:', models)
 
 

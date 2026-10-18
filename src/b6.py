@@ -92,3 +92,17 @@ def score_windows(W):
     P = posteriors(W)
     res = _parallel([(P[i], None, None) for i in range(len(P))])
     return pd.DataFrame(res, columns=['b6a', 'b6b', 'b6_nbeats'])
+
+
+# ---------------------------------------------------------------------- B8 (PCGKolect-v3, proposed)
+def score_noise(W, rel_start, rel_end, ckpt):
+    """Mean noise-class posterior over the frames whose centre lies inside the scored beat (no decoding)."""
+    P = posteriors(W, ckpt=ckpt)                                   # [N, 256, 5]
+    centre = np.arange(P.shape[1]) * segmodel.HOP + segmodel.NFFT // 2 - PAD_L
+    out = np.empty(len(P))
+    for i in range(len(P)):
+        m = (centre >= rel_start[i]) & (centre < rel_end[i])
+        if not m.any():
+            m = np.abs(centre - (rel_start[i] + rel_end[i]) / 2) == np.abs(centre - (rel_start[i] + rel_end[i]) / 2).min()
+        out[i] = P[i, m, 4].mean()
+    return out

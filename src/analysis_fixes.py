@@ -6,7 +6,7 @@
          covariates and a stratified check in heart-rate bands
   fix 4  GEE  rejected ~ class + SNR level + heart rate [+ age], clustered by patient, Holm across models; counts table;
          inspection of the CirCor late-systolic group
-Outputs: results/fix2_*.csv, results/fix3_*.csv, results/fix4_*.csv
+Outputs: results/fix2_*.csv, results/fix3_*.csv, results/fix4_*.csv (fix4_gee_e2s_covariates.csv: S1+S2-referenced E2, post hoc)
 """
 import os, warnings
 import numpy as np, pandas as pd
@@ -15,7 +15,7 @@ import statsmodels.formula.api as smf
 from statsmodels.stats.multitest import multipletests
 from common import PROC, MAN, RES, stable_seed, BMD_ROOT
 from analysis import (all_scores, thresholds, add_rejections, rate_ci, drop_excluded, EXCLUDE, NORMAL, PUBLISHED,
-                      DATASETS, SENSITIVITY, TIE_MASS_MAX)
+                      DATASETS, SENSITIVITY, TIE_MASS_MAX, contrasts, holm)
 
 warnings.filterwarnings('ignore')
 HR_BANDS = [0, 80, 100, 120, 140, 400]
@@ -63,7 +63,7 @@ def weighted_matched(v, w, q=0.90):
     return float(t), p
 
 
-def fix2(e1, e2, models):
+def fix2(e1, e2, models, write=True):
     cal = e1[(e1.split == 'calibration') & e1.cls.isin(NORMAL) & (e1.clean == 1) & e1.dataset.isin(DATASETS)]
     w = 1.0 / cal.groupby('patient_id').beat_id.transform('size').values    # each calibration patient weighs equally
     rows = []
@@ -72,7 +72,8 @@ def fix2(e1, e2, models):
         rows.append(dict(model=m, pooled=t, pooled_tie_prob=p, n_cal_patients=cal.patient_id.nunique(), n_cal_beats=len(cal),
                          **{f'n_cal_patients_{ds}': cal[cal.dataset == ds].patient_id.nunique() for ds in DATASETS}))
     pooled = pd.DataFrame(rows)
-    pooled.to_csv(os.path.join(RES, 'fix2_thresholds_pooled.csv'), index=False)
+    if write:
+        pooled.to_csv(os.path.join(RES, 'fix2_thresholds_pooled.csv'), index=False)
 
     def rej(df, m, kind):
         s = df[m].values
@@ -95,7 +96,8 @@ def fix2(e1, e2, models):
                         res.append(dict(experiment=exp, dataset=ds, snr_level=lv, cls=c, model=m, threshold=kind)
                                    | rate_ci(gc, 'r', None if c in NORMAL else ref))
         out[exp] = pd.DataFrame(res)
-        out[exp].to_csv(os.path.join(RES, f'fix2_recal_{exp.lower()}.csv'), index=False)
+        if write:
+            out[exp].to_csv(os.path.join(RES, f'fix2_recal_{exp.lower()}.csv'), index=False)
     # achieved clean-normal rejection per threshold (calibration vs evaluation patients), all datasets
     rows = []
     cn = e1[e1.cls.isin(NORMAL) & (e1.clean == 1) & e1.dataset.isin(DATASETS)].copy()
@@ -105,7 +107,9 @@ def fix2(e1, e2, models):
             for (ds, sp), g in cn.groupby(['dataset', 'split']):
                 rows.append(dict(dataset=ds, split=sp, model=m, threshold=kind) | rate_ci(g, 'r'))
     nr = drop_excluded(pd.DataFrame(rows))
-    nr.to_csv(os.path.join(RES, 'fix2_clean_normal_rejection.csv'), index=False)
+    if write:
+        nr.to_csv(os.path.join(RES, 'fix2_clean_normal_rejection.csv'), index=False)
+    out['clean_normal'] = nr
     return out
 
 
@@ -126,7 +130,25 @@ def fit(sub, form):
     return dict(odds_ratio=np.nan, or_ci_lo=np.nan, or_ci_hi=np.nan, p=np.nan, cov_struct='not converged')
 
 
-def gee_cov(e2, models):
+def cov_designs(sub, has_age, extra=''):
+    """Formulas (+ row filters) for the unadjusted / HR / HR + age fits of one contrast (sub has y, path, hr_bpm)."""
+    sub['hr_z'] = (sub.hr_bpm - sub.hr_bpm.mean()) / (sub.hr_bpm.std() + 1e-9)
+    snr = (' + C(snr_level)' if sub.snr_level.nunique() > 1 else '') + extra
+    specs = {'unadjusted': f'y ~ path{snr}', 'hr': f'y ~ path{snr} + hr_z + I(hr_z**2)'}
+    if has_age:
+        # drop age levels with < 2 patients in this subset to keep the design estimable
+        keep = sub.groupby('age_cat').patient_id.transform('nunique') >= 2
+        specs['hr_age'] = (f'y ~ path{snr} + hr_z + I(hr_z**2) + C(age_cat)', keep)
+    return specs
+
+
+def contrast_subset(d, m, pc, ref):
+    sub = d[d.cls.isin([pc] + ref)].copy()
+    sub['y'] = sub[f'{m}__matched']; sub['path'] = (sub.cls == pc).astype(int)
+    return sub[sub.groupby('snr_level').y.transform(lambda v: 0 < v.mean() < 1).astype(bool)].sort_values('patient_id')
+
+
+def gee_cov(e2, models, out='fix4_gee_e2_covariates.csv', adjust=True, indep=True):
     rows = []
     for ds in DATASETS:
         d = e2[e2.dataset == ds]
@@ -134,19 +156,11 @@ def gee_cov(e2, models):
         for m in models:
             if (ds, m) in EXCLUDE:
                 continue
-            for c in [c for c in d.cls.unique() if c not in NORMAL]:
-                sub = d[d.cls.isin([c] + list(NORMAL))].copy()
-                sub['y'] = sub[f'{m}__matched']; sub['path'] = (~sub.cls.isin(NORMAL)).astype(int)
-                sub = sub[sub.groupby('snr_level').y.transform(lambda v: 0 < v.mean() < 1).astype(bool)].sort_values('patient_id')
+            for c, pc, ref in contrasts(d, ds):
+                sub = contrast_subset(d, m, pc, ref)
                 if sub.empty or sub[sub.path == 1].patient_id.nunique() < 3 or sub.y.nunique() < 2:
                     continue
-                sub['hr_z'] = (sub.hr_bpm - sub.hr_bpm.mean()) / (sub.hr_bpm.std() + 1e-9)
-                snr = ' + C(snr_level)' if sub.snr_level.nunique() > 1 else ''
-                specs = {'unadjusted': f'y ~ path{snr}', 'hr': f'y ~ path{snr} + hr_z + I(hr_z**2)'}
-                if has_age:
-                    # drop age levels with < 2 patients in this subset to keep the design estimable
-                    keep = sub.groupby('age_cat').patient_id.transform('nunique') >= 2
-                    specs['hr_age'] = (f'y ~ path{snr} + hr_z + I(hr_z**2) + C(age_cat)', keep)
+                specs = cov_designs(sub, has_age)
                 base = dict(dataset=ds, model=m, cls=c, n_beats=len(sub), n_patients=sub.patient_id.nunique(),
                             n_path_patients=sub[sub.path == 1].patient_id.nunique(),
                             hr_median_path=sub[sub.path == 1].hr_bpm.median(), hr_median_normal=sub[sub.path == 0].hr_bpm.median())
@@ -154,23 +168,22 @@ def gee_cov(e2, models):
                     form, keep = (spec if isinstance(spec, tuple) else (spec, None))
                     s2 = sub[keep] if keep is not None else sub
                     r = fit(s2, form)
-                    try:
-                        fi = smf.gee(form, 'patient_id', s2, family=sm.families.Binomial(), cov_struct=sm.cov_struct.Independence()).fit()
-                        r |= dict(or_indep=np.exp(fi.params['path']), p_indep=fi.pvalues['path'])
-                    except Exception:
-                        pass
+                    if indep:
+                        try:
+                            fi = smf.gee(form, 'patient_id', s2, family=sm.families.Binomial(), cov_struct=sm.cov_struct.Independence()).fit()
+                            r |= dict(or_indep=np.exp(fi.params['path']), p_indep=fi.pvalues['path'])
+                        except Exception:
+                            pass
                     rows.append(base | dict(adjustment=name) | r)
     g = pd.DataFrame(rows)
-    g['p_holm'] = np.nan
-    for _, idx in g[~g.model.isin(SENSITIVITY)].groupby(['dataset', 'cls', 'adjustment']).groups.items():
-        ii = [i for i in idx if np.isfinite(g.loc[i, 'p'])]
-        if ii:
-            g.loc[ii, 'p_holm'] = multipletests(g.loc[ii, 'p'], method='holm')[1]
-    g.to_csv(os.path.join(RES, 'fix4_gee_e2_covariates.csv'), index=False)
+    if adjust:
+        g = holm(g, ['dataset', 'cls', 'adjustment'])
+    if out:
+        g.to_csv(os.path.join(RES, out), index=False)
     return g
 
 
-def hr_bands(e2, models):
+def hr_bands(e2, models, write=True):
     rows = []
     e2 = e2.copy()
     e2['hr_band'] = pd.cut(e2.hr_bpm, HR_BANDS, labels=HR_LABELS, right=False).astype(str)
@@ -190,7 +203,8 @@ def hr_bands(e2, models):
                     rows.append(dict(dataset=ds, hr_band=band, cls=c, model=m, normal_rate=ref[f'{m}__matched'].mean(),
                                      n_normal_patients=ref.patient_id.nunique()) | r)
     t = pd.DataFrame(rows)
-    t.to_csv(os.path.join(RES, 'fix3_hr_band_gaps.csv'), index=False)
+    if write:
+        t.to_csv(os.path.join(RES, 'fix3_hr_band_gaps.csv'), index=False)
     return t
 
 
@@ -241,15 +255,18 @@ def late_systolic(e1, e2, models):
 
 def main():
     e1, e2, models = all_scores()
+    _, e2s, models_s = all_scores('e2s')
+    models = [m for m in models if m in models_s]
     thr = thresholds(e1, models)
-    e1 = add_rejections(e1, thr, models); e2 = add_rejections(e2, thr, models)
+    e1 = add_rejections(e1, thr, models); e2 = add_rejections(e2, thr, models); e2s = add_rejections(e2s, thr, models)
     cov = covariates()
-    e1 = e1.merge(cov, on='beat_id', how='left'); e2 = e2.merge(cov, on='beat_id', how='left')
-    assert e1.hr_bpm.notna().all() and e2.hr_bpm.notna().all()
+    e1, e2, e2s = (x.merge(cov, on='beat_id', how='left') for x in (e1, e2, e2s))
+    assert e1.hr_bpm.notna().all() and e2.hr_bpm.notna().all() and e2s.hr_bpm.notna().all()
     fix2(e1, e2, models)
     describe_cov(e1)
     hr_bands(e2, models)
     gee_cov(e2, models)
+    gee_cov(e2s, models, 'fix4_gee_e2s_covariates.csv')
     counts(e1, e2)
     late_systolic(e1, e2, models)
     print('fixes analysis done')

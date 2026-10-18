@@ -21,3 +21,4 @@ pascal,murmur,0,37,94,575,208,25
 pascal,normal,18,104,264,1368,636,89
 circor_synth,synthetic_irregular,0,200,274,1096,1096,200
 circor_synth,synthetic_premature,0,200,274,1051,1051,200
+circor_synth,synthetic_regular,0,200,274,1096,1096,200

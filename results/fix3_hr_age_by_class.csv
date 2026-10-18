@@ -12,6 +12,7 @@ circor,no_murmur_abnormal_outcome,6930.0,90.9090909090909,103.44827586206897,120
 circor,normal,9157.0,90.22556390977444,103.44827586206897,115.38461538461539,"{'Child': 0.717, 'unknown': 0.13, 'Infant': 0.084, 'Adolescent': 0.064, 'Neonate': 0.006}"
 circor,synthetic_irregular,1096.0,87.70327938180002,103.44827586206897,124.25578476490844,"{'Child': 0.8, 'unknown': 0.09, 'Adolescent': 0.06, 'Infant': 0.05}"
 circor,synthetic_premature,1051.0,70.58823529411765,83.33333333333333,101.69491525423729,"{'Child': 0.8, 'unknown': 0.09, 'Adolescent': 0.06, 'Infant': 0.05}"
+circor,synthetic_regular,1096.0,88.23529411764706,103.44827586206897,115.38461538461539,"{'Child': 0.8, 'unknown': 0.09, 'Adolescent': 0.06, 'Infant': 0.05}"
 circor,unknown,1078.0,96.7741935483871,112.78205450955971,130.43478260869566,"{'Child': 0.544, 'Infant': 0.368, 'Adolescent': 0.044, 'unknown': 0.029, 'Neonate': 0.015}"
 pascal,extrasystole,253.0,73.17073170731707,90.9090909090909,103.44827586206897,{'unknown': 1.0}
 pascal,murmur,575.0,73.17073170731707,88.23529411764706,107.14285714285714,{'unknown': 1.0}

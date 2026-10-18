@@ -4,6 +4,9 @@
   B2  Das et al. features -> random forest (120 trees, max_features='sqrt', balanced)
 Per-fold metrics: logs/train/<model>_cv.csv; out-of-fold predictions: data/processed/val_preds_<model>.csv
 Final models: data/models/<model>.joblib
+
+  python classic.py                 B1 LR, B1 SVM, B2 RF (seed 42)
+  python classic.py b2_rf <seed>    seed-robustness refit (post hoc): tag b2_rf_s<seed>; only the forest's random_state changes
 """
 import os
 import numpy as np, pandas as pd, joblib
@@ -19,14 +22,14 @@ from common import PROC, LOGT, MODELS, SEED
 SVM_MAX = 12000   # RBF-SVM training subsample (stratified, seeded) to keep Platt scaling tractable
 
 
-def make(name):
+def make(name, seed=SEED):
     if name == 'b1_lr':
         return make_pipeline(StandardScaler(), LogisticRegression(class_weight='balanced', max_iter=2000))
     if name == 'b1_svm':
         return make_pipeline(StandardScaler(), SVC(kernel='rbf', class_weight='balanced', probability=True, random_state=SEED))
     if name == 'b2_rf':
         return RandomForestClassifier(n_estimators=120, max_features='sqrt', class_weight='balanced',
-                                      random_state=SEED, n_jobs=4)
+                                      random_state=seed, n_jobs=4)
 
 
 def feats(name, z):
@@ -45,25 +48,26 @@ def subsample(idx, y, n, seed=SEED):
 
 
 def fit_fold(args):
-    name, k, X, y, fold = args
+    name, k, X, y, fold, seed = args
     tr = np.flatnonzero(fold != k) if k >= 0 else np.arange(len(y))
     if name == 'b1_svm':
         tr = subsample(tr, y, SVM_MAX)
-    m = make(name).fit(X[tr], y[tr])
+    m = make(name, seed).fit(X[tr], y[tr])
     if k < 0:
         return k, m, None
     te = np.flatnonzero(fold == k)
     return k, None, (te, m.predict_proba(X[te])[:, 1])
 
 
-def main():
+def main(names=('b1_lr', 'b1_svm', 'b2_rf'), seed=SEED):
     meta = pd.read_csv(os.path.join(PROC, 'pn_windows.csv'))
     z = np.load(os.path.join(PROC, 'pn_feats.npz'))
     y, fold = meta.unusable.values, meta.fold.values
-    for name in ('b1_lr', 'b1_svm', 'b2_rf'):
-        X = feats(name, z)
-        with ProcessPoolExecutor(3 if name == 'b2_rf' else 6) as ex:
-            res = list(ex.map(fit_fold, [(name, k, X, y, fold) for k in list(range(5)) + [-1]]))
+    for base in names:
+        X = feats(base, z)
+        name = base if seed == SEED else f'{base}_s{seed}'
+        with ProcessPoolExecutor(3 if base == 'b2_rf' else 6) as ex:
+            res = list(ex.map(fit_fold, [(base, k, X, y, fold, seed) for k in list(range(5)) + [-1]]))
         oof = np.zeros(len(y)); rows = []
         for k, m, r in res:
             if k < 0:
@@ -80,4 +84,5 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    import sys
+    main(sys.argv[1:2], int(sys.argv[2])) if len(sys.argv) > 2 else main()
